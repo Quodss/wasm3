@@ -156,9 +156,9 @@ M3CodePageHeader;
 
 typedef struct M3AllocationFunctionStruct
 {
-    (void*)(* calloc_fn)(size_t, size_t);
-    (void)(* free_fn)(void*);
-    (void*)(* realloc_fn)(void*, size_t);
+    void* (* calloc_fn)(size_t, size_t);
+    void (* free_fn)(void*);
+    void* (* realloc_fn)(void*, size_t);
 }
 M3AllocationFunctionStruct;
 
