@@ -112,9 +112,9 @@ M3AllocationFunctionStruct  m3_alloc_funcs = {
 };
 
 M3Result m3_SetAllocators  (
-    (void*)(* calloc_fn)(size_t, size_t),
-    (void)(* free_fn)(void*),
-    (void*)(* realloc_fn)(void*, size_t)
+    void* (* calloc_fn)(size_t, size_t),
+    void (* free_fn)(void*),
+    void* (* realloc_fn)(void*, size_t)
     )
 {
     if ( (calloc_fn == NULL) || (free_fn == NULL) || (realloc_fn == NULL) ) {
