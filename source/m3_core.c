@@ -105,9 +105,30 @@ void *  m3_Realloc  (void * i_ptr, size_t i_newSize, size_t i_oldSize)
 
 #else
 
+M3AllocationFunctionStruct  m3_alloc_funcs = {
+    calloc,
+    free,
+    realloc
+};
+
+M3Result m3_SetAllocators  (
+    (void*)(* calloc_fn)(size_t, size_t),
+    (void)(* free_fn)(void*),
+    (void*)(* realloc_fn)(void*, size_t)
+    )
+{
+    if ( (calloc_fn == NULL) || (free_fn == NULL) || (realloc_fn == NULL) ) {
+        return m3Err_SetAllocatorsFail;
+    }
+    m3_alloc_funcs.calloc_fn = calloc_fn;
+    m3_alloc_funcs.free_fn = free_fn;
+    m3_alloc_funcs.realloc_fn = realloc_fn;
+    return m3Err_none;
+}
+
 void *  m3_Malloc  (size_t i_size)
 {
-    void * ptr = calloc (i_size, 1);
+    void * ptr = m3_alloc_funcs.calloc_fn (i_size, 1);
 
 //    printf("== alloc %d => %p\n", (u32) i_size, ptr);
 
@@ -117,14 +138,14 @@ void *  m3_Malloc  (size_t i_size)
 void  m3_FreeImpl  (void * io_ptr)
 {
 //    if (io_ptr) printf("== free %p\n", io_ptr);
-    free (io_ptr);
+    m3_alloc_funcs.free_fn (io_ptr);
 }
 
 void *  m3_Realloc  (void * i_ptr, size_t i_newSize, size_t i_oldSize)
 {
     if (UNLIKELY(i_newSize == i_oldSize)) return i_ptr;
 
-    void * newPtr = realloc (i_ptr, i_newSize);
+    void * newPtr = m3_alloc_funcs.realloc_fn (i_ptr, i_newSize);
 
     if (LIKELY(newPtr))
     {

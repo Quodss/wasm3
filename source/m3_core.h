@@ -154,6 +154,13 @@ typedef struct M3CodePageHeader
 }
 M3CodePageHeader;
 
+typedef struct M3AllocationFunctionStruct
+{
+    (void*)(* calloc_fn)(size_t, size_t);
+    (void)(* free_fn)(void*);
+    (void*)(* realloc_fn)(void*, size_t);
+}
+
 
 #define d_m3CodePageFreeLinesThreshold      4+2       // max is: select _sss & CallIndirect + 2 for bridge
 
@@ -209,6 +216,7 @@ int         m3StackGetMax           ();
 #endif
 
 void        m3_Abort                (const char* message);
+M3Result    m3_SetAllocators        ((void*)(* calloc_fn)(size_t, size_t), (void)(* free_fn)(void*), (void*)(* realloc_fn)(void*, size_t))
 void *      m3_Malloc               (size_t i_size);
 void *      m3_Realloc              (void *i_ptr, size_t i_newSize, size_t i_oldSize);
 void        m3_FreeImpl             (void * i_ptr);
