@@ -31,6 +31,8 @@
 
 #include <limits.h>
 
+#include "softfloat.h"
+
 d_m3BeginExternC
 
 # define rewrite_op(OP)             * ((void **) (_pc-1)) = (void*)(OP)
