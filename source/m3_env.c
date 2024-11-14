@@ -676,8 +676,10 @@ M3ValueType  m3_GetGlobalType  (IM3Global          i_global)
 }
 
 
-void *  v_FindFunction  (IM3Module i_module, const char * const i_name)
+void *  v_FindFunction  (IM3Module i_module, void *i_name_ptr)
 {
+    const char * const i_name = (const char * const) i_name_ptr;
+    
     for (u32 i = 0; i < i_module->numFunctions; ++i)
     {
         IM3Function f = & i_module->functions [i];
