@@ -26,12 +26,18 @@ M3Result  ParseType_Memory  (M3MemoryInfo * o_memory, bytes_t * io_bytes, cbytes
 
     u8 flag;
 
-_   (ReadLEB_u7 (& flag, io_bytes, i_end));                   // really a u1
+_   (Read_u8 (& flag, io_bytes, i_end));                   // really a u1
 _   (ReadLEB_u32 (& o_memory->initPages, io_bytes, i_end));
 
-    o_memory->maxPages = 0;
-    if (flag)
-_       (ReadLEB_u32 (& o_memory->maxPages, io_bytes, i_end));
+    o_memory->imaxPages = -1;
+    if (flag == 1)
+    {
+_       (ReadLEB_i32 (& o_memory->imaxPages, io_bytes, i_end));
+    }
+    else if (flag != 0)
+    {
+        _throw(m3Err_WeirdFlag);
+    }
 
     _catch: return result;
 }
@@ -141,6 +147,45 @@ _       (Module_AddFunction (io_module, funcTypeIndex, NULL /* import info */));
     _catch: return result;
 }
 
+M3Result
+ParseSection_Table (M3Module * io_module, bytes_t i_bytes, cbytes_t i_end)
+{
+    M3Result result = m3Err_none;
+    u32 table_lim_min = 0;
+    i32 table_lim_max = 0;
+    u32 num_tables;
+    _( ReadLEB_u32(&num_tables, &i_bytes, i_end) );
+    if (num_tables > 1)
+    {
+        _throw(m3Err_tooManyTables);
+    }
+    if (num_tables)
+    {
+        u8 ref_type;
+        _( Read_u8(&ref_type, &i_bytes, i_end) );
+
+        if (ref_type != d_refKind_func)
+        {
+            _throw(m3Err_ExternTable);
+        }
+        table_lim_max = -1;
+        u8 flag;
+        _( Read_u8(&flag, &i_bytes, i_end) );
+        _( ReadLEB_u32(&table_lim_min, &i_bytes, i_end) );
+        if (flag == 1)
+        {
+            _( ReadLEB_i32 (&table_lim_max, &i_bytes, i_end) );
+        }
+        else if (flag != 0)
+        {
+            _throw(m3Err_WeirdFlag);
+        }
+    }
+    io_module->table0SizeMin = table_lim_min;
+    io_module->table0SizeMax = table_lim_max;
+
+    _catch: return result;
+}
 
 M3Result  ParseSection_Import  (IM3Module io_module, bytes_t i_bytes, cbytes_t i_end)
 {
@@ -193,12 +238,16 @@ _               (ParseType_Memory (& io_module->memoryInfo, & i_bytes, i_end));
 
 _               (ReadLEB_i7 (& waType, & i_bytes, i_end));
 _               (NormalizeType (& type, waType));
-_               (ReadLEB_u7 (& isMutable, & i_bytes, i_end));                     m3log (parse, "     global: %s mutable=%d", c_waTypes [type], (u32) isMutable);
-
+_               (Read_u8 (& isMutable, & i_bytes, i_end));                     m3log (parse, "     global: %s mutable=%d", c_waTypes [type], (u32) isMutable);
+                if (isMutable > 1)
+                {
+                    _throw(m3Err_WeirdFlag);
+                }
                 IM3Global global;
 _               (Module_AddGlobal (io_module, & global, type, isMutable, true /* isImport */));
                 global->import = import;
                 import = clearImport;
+                io_module->numGlobImports++;
             }
             break;
 
@@ -405,20 +454,60 @@ _   (ReadLEB_u32 (& numDataSegments, & i_bytes, i_end));                        
     {
         M3DataSegment * segment = & io_module->dataSegments [i];
 
-_       (ReadLEB_u32 (& segment->memoryRegion, & i_bytes, i_end));
+        u8 data_kind;
+_       (Read_u8 (&data_kind, &i_bytes, i_end));
+        switch (data_kind)
+        {
+            case d_dataKind_active0:
+            {
+                segment->initExpr = i_bytes;
+_               (Parse_InitExpr (io_module, & i_bytes, i_end));
+                segment->initExprSize = (u32) (i_bytes - segment->initExpr);
 
-        segment->initExpr = i_bytes;
-_       (Parse_InitExpr (io_module, & i_bytes, i_end));
-        segment->initExprSize = (u32) (i_bytes - segment->initExpr);
+                _throwif (m3Err_wasmMissingInitExpr, segment->initExprSize <= 1);
 
-        _throwif (m3Err_wasmMissingInitExpr, segment->initExprSize <= 1);
+_               (ReadLEB_u32 (& segment->size, & i_bytes, i_end));
+                segment->data = i_bytes;                                                    m3log (parse, "    segment [%u]  memory: %u;  expr-size: %d;  size: %d",
+                                                                                            i, segment->initExprSize, segment->size);
+                i_bytes += segment->size;
 
-_       (ReadLEB_u32 (& segment->size, & i_bytes, i_end));
-        segment->data = i_bytes;                                                    m3log (parse, "    segment [%u]  memory: %u;  expr-size: %d;  size: %d",
-                                                                                       i, segment->memoryRegion, segment->initExprSize, segment->size);
-        i_bytes += segment->size;
+                _throwif("data segment underflow", i_bytes > i_end);
+                break;
+            }
+            case d_dataKind_passive:
+            {
+                segment->initExpr = NULL;
+                segment->initExprSize = 0;
 
-        _throwif("data segment underflow", i_bytes > i_end);
+_               (ReadLEB_u32 (& segment->size, & i_bytes, i_end));
+                segment->data = i_bytes;                                                    m3log (parse, "    segment [%u]  memory: %u;  expr-size: %d;  size: %d",
+                                                                                            i, segment->initExprSize, segment->size);
+                i_bytes += segment->size;
+
+                _throwif("data segment underflow", i_bytes > i_end);
+                break;
+            }
+            case d_dataKind_active_idx:
+            {
+                u32 mem_idx;
+_               (ReadLEB_u32 (& mem_idx, & i_bytes, i_end));
+                _throwif(m3Err_tooManyMemorySections, (mem_idx != 0));
+
+                segment->initExpr = i_bytes;
+_               (Parse_InitExpr (io_module, & i_bytes, i_end));
+                segment->initExprSize = (u32) (i_bytes - segment->initExpr);
+
+                _throwif (m3Err_wasmMissingInitExpr, segment->initExprSize <= 1);
+
+_               (ReadLEB_u32 (& segment->size, & i_bytes, i_end));
+                segment->data = i_bytes;                                                    m3log (parse, "    segment [%u]  memory: %u;  expr-size: %d;  size: %d",
+                                                                                            i, segment->initExprSize, segment->size);
+                i_bytes += segment->size;
+
+                _throwif("data segment underflow", i_bytes > i_end);
+                break;
+            }
+        }
     }
 
     _catch:
@@ -460,7 +549,7 @@ _   (ReadLEB_u32 (& numGlobals, & i_bytes, i_end));                             
 
 _       (ReadLEB_i7 (& waType, & i_bytes, i_end));
 _       (NormalizeType (& type, waType));
-_       (ReadLEB_u7 (& isMutable, & i_bytes, i_end));                                 m3log (parse, "    global: [%d] %s mutable: %d", i, c_waTypes [type],   (u32) isMutable);
+_       (Read_u8 (& isMutable, & i_bytes, i_end));                                 m3log (parse, "    global: [%d] %s mutable: %d", i, c_waTypes [type],   (u32) isMutable);
 
         IM3Global global;
 _       (Module_AddGlobal (io_module, & global, type, isMutable, false /* isImport */));
@@ -532,6 +621,21 @@ _               (Read_utf8 (& name, & i_bytes, i_end));
     _catch: return result;
 }
 
+M3Result
+ParseSection_DataCount (M3Module * io_module, bytes_t i_bytes, cbytes_t i_end)
+{
+    M3Result result = m3Err_none;
+    i32 data_cnt = -1;
+    if (i_bytes < i_end)
+    {
+        u32 data_cnt_read;
+        _( ReadLEB_u32(&data_cnt_read, &i_bytes, i_end) );
+        data_cnt = (i32)data_cnt_read;
+    }
+    io_module->dataCnt = data_cnt;
+
+    _catch: return result;
+}
 
 M3Result  ParseModuleSection  (M3Module * o_module, u8 i_sectionType, bytes_t i_bytes, u32 i_numBytes)
 {
@@ -545,7 +649,7 @@ M3Result  ParseModuleSection  (M3Module * o_module, u8 i_sectionType, bytes_t i_
         ParseSection_Type,      // 1
         ParseSection_Import,    // 2
         ParseSection_Function,  // 3
-        NULL,                   // 4: TODO Table
+        ParseSection_Table,     // 4
         ParseSection_Memory,    // 5
         ParseSection_Global,    // 6
         ParseSection_Export,    // 7
@@ -553,7 +657,7 @@ M3Result  ParseModuleSection  (M3Module * o_module, u8 i_sectionType, bytes_t i_
         ParseSection_Element,   // 9
         ParseSection_Code,      // 10
         ParseSection_Data,      // 11
-        NULL,                   // 12: TODO DataCount
+        ParseSection_DataCount, // 12
     };
 
     M3Parser parser = NULL;

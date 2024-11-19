@@ -185,6 +185,12 @@ M3AllocationFunctionStruct;
 #define d_externalKind_memory               2
 #define d_externalKind_global               3
 
+#define d_dataKind_active0                  0
+#define d_dataKind_passive                  1
+#define d_dataKind_active_idx               2
+
+#define d_refKind_func                      0x70
+
 static const char * const c_waTypes []          = { "nil", "i32", "i64", "f32", "f64", "unknown" };
 static const char * const c_waCompactTypes []   = { "_", "i", "I", "f", "F", "?" };
 
@@ -216,7 +222,6 @@ int         m3StackGetMax           ();
 #endif
 
 void        m3_Abort                (const char* message);
-M3Result    m3_SetAllocators        (void* (* calloc_fn)(size_t, size_t), void (* free_fn)(void*), void* (* realloc_fn)(void*, size_t));
 void *      m3_Malloc               (size_t i_size);
 void *      m3_Realloc              (void *i_ptr, size_t i_newSize, size_t i_oldSize);
 void        m3_FreeImpl             (void * i_ptr);

@@ -2153,7 +2153,7 @@ _   (Compile_Operator (o, i_opcode));
 #define d_convertOpList(OP)                 { op_##OP##_r_r,            op_##OP##_r_s,              op_##OP##_s_r,              op_##OP##_s_s }
 
 
-const M3OpInfo c_operations [] =
+const M3OpInfo M3_OP_Array [] =
 {
     M3OP( "unreachable",         0, none,   d_logOp (Unreachable),              Compile_Unreachable ),  // 0x00
     M3OP( "nop",                 0, none,   d_emptyOpList,                      Compile_Nop ),          // 0x01 .
@@ -2423,7 +2423,7 @@ const M3OpInfo c_operations [] =
 # endif
 };
 
-const M3OpInfo c_operationsFC [] =
+const M3OpInfo M3_OP_ArrayFC [] =
 {
     M3OP_F( "i32.trunc_s:sat/f32",0,  i_32,   d_convertOpList (i32_TruncSat_f32),        Compile_Convert ),  // 0x00
     M3OP_F( "i32.trunc_u:sat/f32",0,  i_32,   d_convertOpList (u32_TruncSat_f32),        Compile_Convert ),  // 0x01
@@ -2450,14 +2450,14 @@ IM3OpInfo  GetOpInfo  (m3opcode_t opcode)
 {
     switch (opcode >> 8) {
     case 0x00:
-        if (opcode < M3_COUNT_OF(c_operations)) {
-            return &c_operations[opcode];
+        if (opcode < M3_COUNT_OF(M3_OP_Array)) {
+            return &M3_OP_Array[opcode];
         }
         break;
     case 0xFC:
         opcode &= 0xFF;
-        if (opcode < M3_COUNT_OF(c_operationsFC)) {
-            return &c_operationsFC[opcode];
+        if (opcode < M3_COUNT_OF(M3_OP_ArrayFC)) {
+            return &M3_OP_ArrayFC[opcode];
         }
         break;
     }

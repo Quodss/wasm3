@@ -20,7 +20,7 @@ d_m3BeginExternC
 typedef struct M3MemoryInfo
 {
     u32     initPages;
-    u32     maxPages;
+    i32     imaxPages;  // -1 means no limit
 }
 M3MemoryInfo;
 
@@ -45,7 +45,6 @@ typedef struct M3DataSegment
     const u8 *              data;
 
     u32                     initExprSize;
-    u32                     memoryRegion;
     u32                     size;
 }
 M3DataSegment;
@@ -97,8 +96,9 @@ typedef struct M3Module
 
     u32                     numDataSegments;
     M3DataSegment *         dataSegments;
+    i32                     dataCnt; // -1 means not counted
 
-    //u32                     importedGlobals;
+    u32                     numGlobImports;
     u32                     numGlobals;
     M3Global *              globals;
 
@@ -108,6 +108,8 @@ typedef struct M3Module
 
     IM3Function *           table0;
     u32                     table0Size;
+    u32                     table0SizeMin;
+    i32                     table0SizeMax;  // -1 no upper limit, 0 no table
 
     M3MemoryInfo            memoryInfo;
     bool                    memoryImported;

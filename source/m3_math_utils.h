@@ -12,6 +12,8 @@
 
 #include <limits.h>
 
+#include "softfloat.h"
+
 #if defined(M3_COMPILER_MSVC)
 
 #include <intrin.h>

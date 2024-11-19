@@ -31,7 +31,6 @@
 
 #include <limits.h>
 
-#include "softfloat.h"
 
 d_m3BeginExternC
 

@@ -140,6 +140,9 @@ M3OpInfo;
 
 typedef const M3OpInfo *    IM3OpInfo;
 
+extern const M3OpInfo M3_OP_Array [];
+extern const M3OpInfo M3_OP_ArrayFC [];
+
 IM3OpInfo  GetOpInfo  (m3opcode_t opcode);
 
 // TODO: This helper should be removed, when MultiValue is implemented

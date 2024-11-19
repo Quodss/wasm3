@@ -135,6 +135,9 @@ d_m3ErrorConst  (wasmSectionOverrun,            "section overrun while parsing W
 d_m3ErrorConst  (invalidTypeId,                 "unknown value_type")
 d_m3ErrorConst  (tooManyMemorySections,         "only one memory per module is supported")
 d_m3ErrorConst  (tooManyArgsRets,               "too many arguments or return values")
+d_m3ErrorConst  (tooManyTables,                 "expected no more than one table")
+d_m3ErrorConst  (ExternTable,                   "unexpected table with external references")
+d_m3ErrorConst  (WeirdFlag,                     "a flag is neither 0 nor 1")
 
 // link errors
 d_m3ErrorConst  (moduleAlreadyLinked,           "attempting to bind module to multiple runtimes")
@@ -210,6 +213,10 @@ d_m3ErrorConst  (trapStackOverflow,             "[trap] stack overflow")
     uint32_t            m3_GetMemorySize            (IM3Runtime             i_runtime);
 
     void *              m3_GetUserData              (IM3Runtime             i_runtime);
+
+    M3Result            m3_SetAllocators            (void* (* calloc_fn)(size_t, size_t),
+                                                     void  (* free_fn)(void*),
+                                                     void* (* realloc_fn)(void*, size_t));
 
 
 //-------------------------------------------------------------------------------------------------------------------------------
