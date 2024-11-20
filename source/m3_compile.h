@@ -135,6 +135,17 @@ typedef struct M3OpInfo
     IM3Operation            operations [4];
 
     M3Compiler              compiler;
+
+    u8                      numArgs;  //  taken from the stack
+    u8                      numRets;
+    i8                      numArgsImmediate; // immediate arguments, -1 means special case
+    u8                      *typeSignature;  // args, then rets
+                                             // i: i32
+                                             // I: i64
+                                             // f: f32
+                                             // F: f64
+                                             // x: any
+
 }
 M3OpInfo;
 
