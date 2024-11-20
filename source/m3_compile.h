@@ -139,7 +139,7 @@ typedef struct M3OpInfo
     u8                      numArgs;  //  taken from the stack
     u8                      numRets;
     i8                      numArgsImmediate; // immediate arguments, -1 means special case
-    u8                      *typeSignature;  // args, then rets
+    ccstr_t                 typeSignature;  // args, then rets
                                              // i: i32
                                              // I: i64
                                              // f: f32
