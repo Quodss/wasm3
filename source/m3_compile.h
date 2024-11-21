@@ -16,6 +16,8 @@ d_m3BeginExternC
 
 enum
 {
+    c_waOp_unreachable          = 0x00,
+    c_waOp_nop                  = 0x01,
     c_waOp_block                = 0x02,
     c_waOp_loop                 = 0x03,
     c_waOp_if                   = 0x04,
@@ -24,12 +26,19 @@ enum
     c_waOp_branch               = 0x0c,
     c_waOp_branchTable          = 0x0e,
     c_waOp_branchIf             = 0x0d,
+    c_waOp_return               = 0x0f,
     c_waOp_call                 = 0x10,
+    c_waOp_call_indirect        = 0x11,
+    c_waOp_return_call          = 0x12,
+    c_waOp_return_call_indirect = 0x13,
+    c_waOp_drop                 = 0x1a,
+    c_waOp_select               = 0x1b,
     c_waOp_getLocal             = 0x20,
     c_waOp_setLocal             = 0x21,
     c_waOp_teeLocal             = 0x22,
 
     c_waOp_getGlobal            = 0x23,
+    c_waOp_setGlobal            = 0x24,
 
     c_waOp_i32_const            = 0x41,
     c_waOp_i64_const            = 0x42,
@@ -138,13 +147,12 @@ typedef struct M3OpInfo
 
     u8                      numArgs;  //  taken from the stack
     u8                      numRets;
-    i8                      numArgsImmediate; // immediate arguments, -1 means special case
+    i8                      numArgsImmediate; // u32 immediate arguments, -1 means special case
     ccstr_t                 typeSignature;  // args, then rets
                                              // i: i32
                                              // I: i64
                                              // f: f32
                                              // F: f64
-                                             // x: any
 
 }
 M3OpInfo;

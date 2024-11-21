@@ -2169,7 +2169,7 @@ const M3OpInfo M3_OP_Array [] =
     M3OP( "br_if",              -1, none,   d_logOp2 (BranchIf_r, BranchIf_s),  Compile_Branch,       0, 0,  1, NULL ),       // 0x0d
     M3OP( "br_table",           -1, none,   d_logOp (BranchTable),              Compile_BranchTable,  0, 0, -1, NULL ),       // 0x0e
     M3OP( "return",              0, any,    d_logOp (Return),                   Compile_Return,       0, 0,  0, NULL ),       // 0x0f
-    M3OP( "call",                0, any,    d_logOp (Call),                     Compile_Call,         0, 0,  0, NULL ),       // 0x10
+    M3OP( "call",                0, any,    d_logOp (Call),                     Compile_Call,         0, 0,  1, NULL ),       // 0x10
     M3OP( "call_indirect",       0, any,    d_logOp (CallIndirect),             Compile_CallIndirect, 0, 0,  2, NULL ),       // 0x11
     M3OP( "return_call",         0, any,    d_emptyOpList,                      Compile_Call,         0, 0, -1, NULL ),       // 0x12 TODO: Optimize
     M3OP( "return_call_indirect",0, any,    d_emptyOpList,                      Compile_CallIndirect, 0, 0, -1, NULL ),       // 0x13
@@ -2177,7 +2177,7 @@ const M3OpInfo M3_OP_Array [] =
     M3OP_RESERVED,  M3OP_RESERVED,                                                                                            // 0x14 - 0x15
     M3OP_RESERVED,  M3OP_RESERVED, M3OP_RESERVED, M3OP_RESERVED,                                                              // 0x16 - 0x19
 
-    M3OP( "drop",               -1, none,   d_emptyOpList,                      Compile_Drop,         1, 0,  0, "x"),    // 0x1a
+    M3OP( "drop",               -1, none,   d_emptyOpList,                      Compile_Drop,         1, 0,  0, NULL),        // 0x1a
     M3OP( "select",             -2, any,    d_emptyOpList,                      Compile_Select,       3, 1,  0, NULL ),       // 0x1b
 
     M3OP_RESERVED,  M3OP_RESERVED, M3OP_RESERVED, M3OP_RESERVED,                                                              // 0x1c - 0x1f
@@ -2222,10 +2222,10 @@ const M3OpInfo M3_OP_Array [] =
     M3OP( "memory.size",        1,  i_32,   d_logOp (MemSize),                  Compile_Memory_Size,  0, 1,  1, "i" ),   // 0x3f
     M3OP( "memory.grow",        1,  i_32,   d_logOp (MemGrow),                  Compile_Memory_Grow,  1, 1,  1, "ii" ),  // 0x40
 
-    M3OP( "i32.const",          1,  i_32,   d_logOp (Const32),                  Compile_Const_i32,    0, 1,  1, "i" ),   // 0x41
-    M3OP( "i64.const",          1,  i_64,   d_logOp (Const64),                  Compile_Const_i64,    0, 1,  1, "I" ),   // 0x42
-    M3OP_F( "f32.const",        1,  f_32,   d_emptyOpList,                      Compile_Const_f32,    0, 1,  1, "f" ),   // 0x43
-    M3OP_F( "f64.const",        1,  f_64,   d_emptyOpList,                      Compile_Const_f64,    0, 1,  1, "F" ),   // 0x44
+    M3OP( "i32.const",          1,  i_32,   d_logOp (Const32),                  Compile_Const_i32,    0, 1, -1, "i" ),   // 0x41
+    M3OP( "i64.const",          1,  i_64,   d_logOp (Const64),                  Compile_Const_i64,    0, 1, -1, "I" ),   // 0x42
+    M3OP_F( "f32.const",        1,  f_32,   d_emptyOpList,                      Compile_Const_f32,    0, 1, -1, "f" ),   // 0x43
+    M3OP_F( "f64.const",        1,  f_64,   d_emptyOpList,                      Compile_Const_f64,    0, 1, -1, "F" ),   // 0x44
 
     M3OP( "i32.eqz",            0,  i_32,   d_unaryOpList (i32, EqualToZero)        , NULL,           1, 1,  0, "ii" ),  // 0x45
     M3OP( "i32.eq",             -1, i_32,   d_commutativeBinOpList (i32, Equal)     , NULL,           2, 1,  0, "iii" ), // 0x46
@@ -2343,38 +2343,38 @@ const M3OpInfo M3_OP_Array [] =
     M3OP_F( "i32.trunc_s/f64",  0,  i_32,   d_convertOpList (i32_Trunc_f64),        Compile_Convert,  1, 1,  0, "Fi" ),  // 0xaa
     M3OP_F( "i32.trunc_u/f64",  0,  i_32,   d_convertOpList (u32_Trunc_f64),        Compile_Convert,  1, 1,  0, "Fi" ),  // 0xab
 
-    M3OP( "i64.extend_s/i32",   0,  i_64,   d_unaryOpList (i64, Extend_i32),        NULL,             1, 1,  0, "iI" ),  // 0xac
-    M3OP( "i64.extend_u/i32",   0,  i_64,   d_unaryOpList (i64, Extend_u32),        NULL,             1, 1,  0, "iI" ),  // 0xad
+    M3OP( "i64.extend_s/i32",   0,  i_64,   d_unaryOpList (i64, Extend_i32),        NULL,               1, 1,  0, "iI" ),  // 0xac
+    M3OP( "i64.extend_u/i32",   0,  i_64,   d_unaryOpList (i64, Extend_u32),        NULL,               1, 1,  0, "iI" ),  // 0xad
 
-    M3OP_F( "i64.trunc_s/f32",  0,  i_64,   d_convertOpList (i64_Trunc_f32),        Compile_Convert,  1, 1,  0, "fI" ),  // 0xae
-    M3OP_F( "i64.trunc_u/f32",  0,  i_64,   d_convertOpList (u64_Trunc_f32),        Compile_Convert,  1, 1,  0, "fI" ),  // 0xaf
-    M3OP_F( "i64.trunc_s/f64",  0,  i_64,   d_convertOpList (i64_Trunc_f64),        Compile_Convert,  1, 1,  0, "FI" ),  // 0xb0
-    M3OP_F( "i64.trunc_u/f64",  0,  i_64,   d_convertOpList (u64_Trunc_f64),        Compile_Convert,  1, 1,  0, "FI" ),  // 0xb1
+    M3OP_F( "i64.trunc_s/f32",  0,  i_64,   d_convertOpList (i64_Trunc_f32),        Compile_Convert,    1, 1,  0, "fI" ),  // 0xae
+    M3OP_F( "i64.trunc_u/f32",  0,  i_64,   d_convertOpList (u64_Trunc_f32),        Compile_Convert,    1, 1,  0, "fI" ),  // 0xaf
+    M3OP_F( "i64.trunc_s/f64",  0,  i_64,   d_convertOpList (i64_Trunc_f64),        Compile_Convert,    1, 1,  0, "FI" ),  // 0xb0
+    M3OP_F( "i64.trunc_u/f64",  0,  i_64,   d_convertOpList (u64_Trunc_f64),        Compile_Convert,    1, 1,  0, "FI" ),  // 0xb1
 
-    M3OP_F( "f32.convert_s/i32",0,  f_32,   d_convertOpList (f32_Convert_i32),      Compile_Convert,  1, 1,  0, "if" ),  // 0xb2
-    M3OP_F( "f32.convert_u/i32",0,  f_32,   d_convertOpList (f32_Convert_u32),      Compile_Convert,  1, 1,  0, "if" ),  // 0xb3
-    M3OP_F( "f32.convert_s/i64",0,  f_32,   d_convertOpList (f32_Convert_i64),      Compile_Convert,  1, 1,  0, "If" ),  // 0xb4
-    M3OP_F( "f32.convert_u/i64",0,  f_32,   d_convertOpList (f32_Convert_u64),      Compile_Convert,  1, 1,  0, "If" ),  // 0xb5
+    M3OP_F( "f32.convert_s/i32",0,  f_32,   d_convertOpList (f32_Convert_i32),      Compile_Convert,    1, 1,  0, "if" ),  // 0xb2
+    M3OP_F( "f32.convert_u/i32",0,  f_32,   d_convertOpList (f32_Convert_u32),      Compile_Convert,    1, 1,  0, "if" ),  // 0xb3
+    M3OP_F( "f32.convert_s/i64",0,  f_32,   d_convertOpList (f32_Convert_i64),      Compile_Convert,    1, 1,  0, "If" ),  // 0xb4
+    M3OP_F( "f32.convert_u/i64",0,  f_32,   d_convertOpList (f32_Convert_u64),      Compile_Convert,    1, 1,  0, "If" ),  // 0xb5
 
-    M3OP_F( "f32.demote/f64",   0,  f_32,   d_unaryOpList (f32, Demote_f64),        NULL,             1, 1,  0, "Ff" ),  // 0xb6
+    M3OP_F( "f32.demote/f64",   0,  f_32,   d_unaryOpList (f32, Demote_f64),        NULL,               1, 1,  0, "Ff" ),  // 0xb6
 
-    M3OP_F( "f64.convert_s/i32",0,  f_64,   d_convertOpList (f64_Convert_i32),      Compile_Convert,  1, 1,  0, "iF" ),  // 0xb7
-    M3OP_F( "f64.convert_u/i32",0,  f_64,   d_convertOpList (f64_Convert_u32),      Compile_Convert,  1, 1,  0, "iF" ),  // 0xb8
-    M3OP_F( "f64.convert_s/i64",0,  f_64,   d_convertOpList (f64_Convert_i64),      Compile_Convert,  1, 1,  0, "IF" ),  // 0xb9
-    M3OP_F( "f64.convert_u/i64",0,  f_64,   d_convertOpList (f64_Convert_u64),      Compile_Convert,  1, 1,  0, "IF" ),  // 0xba
+    M3OP_F( "f64.convert_s/i32",0,  f_64,   d_convertOpList (f64_Convert_i32),      Compile_Convert,    1, 1,  0, "iF" ),  // 0xb7
+    M3OP_F( "f64.convert_u/i32",0,  f_64,   d_convertOpList (f64_Convert_u32),      Compile_Convert,    1, 1,  0, "iF" ),  // 0xb8
+    M3OP_F( "f64.convert_s/i64",0,  f_64,   d_convertOpList (f64_Convert_i64),      Compile_Convert,    1, 1,  0, "IF" ),  // 0xb9
+    M3OP_F( "f64.convert_u/i64",0,  f_64,   d_convertOpList (f64_Convert_u64),      Compile_Convert,    1, 1,  0, "IF" ),  // 0xba
 
-    M3OP_F( "f64.promote/f32",  0,  f_64,   d_unaryOpList (f64, Promote_f32),       NULL,             1, 1,  0, "fF" ),  // 0xbb
+    M3OP_F( "f64.promote/f32",     0, f_64,   d_unaryOpList (f64, Promote_f32),     NULL,               1, 1,  0, "fF" ),  // 0xbb
 
-    M3OP_F( "i32.reinterpret/f32",0,i_32,   d_convertOpList (i32_Reinterpret_f32),  Compile_Convert,  1, 1,  0, "fi" ),  // 0xbc
-    M3OP_F( "i64.reinterpret/f64",0,i_64,   d_convertOpList (i64_Reinterpret_f64),  Compile_Convert,  1, 1,  0, "FI" ),  // 0xbd
-    M3OP_F( "f32.reinterpret/i32",0,f_32,   d_convertOpList (f32_Reinterpret_i32),  Compile_Convert,  1, 1,  0, "if" ),  // 0xbe
-    M3OP_F( "f64.reinterpret/i64",0,f_64,   d_convertOpList (f64_Reinterpret_i64),  Compile_Convert,  1, 1,  0, "IF" ),  // 0xbf
+    M3OP_F( "i32.reinterpret/f32", 0, i_32,   d_convertOpList (i32_Reinterpret_f32),  Compile_Convert,  1, 1,  0, "fi" ),  // 0xbc
+    M3OP_F( "i64.reinterpret/f64", 0, i_64,   d_convertOpList (i64_Reinterpret_f64),  Compile_Convert,  1, 1,  0, "FI" ),  // 0xbd
+    M3OP_F( "f32.reinterpret/i32", 0, f_32,   d_convertOpList (f32_Reinterpret_i32),  Compile_Convert,  1, 1,  0, "if" ),  // 0xbe
+    M3OP_F( "f64.reinterpret/i64", 0, f_64,   d_convertOpList (f64_Reinterpret_i64),  Compile_Convert,  1, 1,  0, "IF" ),  // 0xbf
 
-    M3OP( "i32.extend8_s",       0,  i_32,   d_unaryOpList (i32, Extend8_s),        NULL,             1, 1,  0, "ii" ),  // 0xc0
-    M3OP( "i32.extend16_s",      0,  i_32,   d_unaryOpList (i32, Extend16_s),       NULL,             1, 1,  0, "ii" ),  // 0xc1
-    M3OP( "i64.extend8_s",       0,  i_64,   d_unaryOpList (i64, Extend8_s),        NULL,             1, 1,  0, "II" ),  // 0xc2
-    M3OP( "i64.extend16_s",      0,  i_64,   d_unaryOpList (i64, Extend16_s),       NULL,             1, 1,  0, "II" ),  // 0xc3
-    M3OP( "i64.extend32_s",      0,  i_64,   d_unaryOpList (i64, Extend32_s),       NULL,             1, 1,  0, "II" ),  // 0xc4
+    M3OP( "i32.extend8_s",         0, i_32,   d_unaryOpList (i32, Extend8_s),         NULL,             1, 1,  0, "ii" ),  // 0xc0
+    M3OP( "i32.extend16_s",        0, i_32,   d_unaryOpList (i32, Extend16_s),        NULL,             1, 1,  0, "ii" ),  // 0xc1
+    M3OP( "i64.extend8_s",         0, i_64,   d_unaryOpList (i64, Extend8_s),         NULL,             1, 1,  0, "II" ),  // 0xc2
+    M3OP( "i64.extend16_s",        0, i_64,   d_unaryOpList (i64, Extend16_s),        NULL,             1, 1,  0, "II" ),  // 0xc3
+    M3OP( "i64.extend32_s",        0, i_64,   d_unaryOpList (i64, Extend32_s),        NULL,             1, 1,  0, "II" ),  // 0xc4
 
 # ifdef DEBUG // for codepage logging. the order doesn't matter:
 #   define d_m3DebugOp(OP) M3OP (#OP, 0, none, { op_##OP })

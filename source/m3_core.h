@@ -181,6 +181,7 @@ M3AllocationFunctionStruct;
 #define d_m3MaxSaneFunctionArgRetCount      1000    // still insane, but whatever
 #define d_m3MaxSaneLocalCount               10000   // function args and declared locals
 #define d_m3MaxSaneTypeStackSize            100000
+#define d_m3MaxSaneFrameDepth               1000
 
 #define d_externalKind_function             0
 #define d_externalKind_table                1

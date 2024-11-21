@@ -2,7 +2,7 @@
 #include "m3_exception.h"
 #include "m3_compile.h"
 #include "m3_env.h"
-
+#include "m3_bind.h"
 
 static M3Result
 ValidateFunctions(IM3Module module)
@@ -181,178 +181,795 @@ ValidateDatacnt(IM3Module module)
     return m3Err_none;
 }
 
+typedef enum {
+    bk_loop,
+    bk_if,
+    bk_block
+} BlockKind;
 
-typedef struct _frame_ll {
-    u16 numRets;
-    u16 numArgs;
-    u8* types;
-    struct _frame_ll* next;
-} FrameLL;
+typedef struct Frame {
+    BlockKind kind;
+    bool is_true_branch;
+    u32 base_i;  //  start of the type stack for this frame
+    IM3FuncType blocktype;
+} Frame;
 
-typedef struct {
-    bytes_t expression;
-    bytes_t end;
-    FrameLL* frames;
-} WorkItem;
-
-typedef struct _WorkNode {
-    WorkItem item;
-    struct _WorkNode* next;
-} WorkNode;
-
-typedef struct {
-    WorkNode* head; // must not be pointed at by other nodes if not NULL,
-                     //   must not be NULL if tail is not NULL
-                     //   must point to NULL iff tail is NULL
-
-    WorkNode* tail;  // must point to NULL if not NULL
-} WorkChain;
-
-static void
-PushTail(WorkChain* chain, WorkItem item)
+// only defined for ops with non-NULL signatures
+static M3Result
+SkipImmediateArgs(m3opcode_t op,
+  i8 numArgsImmediate,
+  bytes_t *io_bytes,
+  cbytes_t end)
 {
-    WorkNode* next = m3_Malloc(sizeof(WorkNode));
-    next->item = item;
-    next->next = NULL;
-    if (!chain->tail)
+    M3Result result = m3Err_none;
+
+    if (numArgsImmediate >= 0)
     {
-        if (!chain->head)
+        u32 sink;
+        while ((numArgsImmediate--) > 0)
         {
-            chain->head = next;  // [NULL, NULL] -> [head->NULL, NULL]
+            _( ReadLEB_u32(&sink, io_bytes, end) );
+        }
+    }
+    else
+    {
+        switch (op)
+        {
+            case c_waOp_i32_const:
+            {
+                i32 sink;
+                _( ReadLEB_i32(&sink, io_bytes, end) );
+                break;
+            }
+            case c_waOp_i64_const:
+            {
+                i64 sink;
+                _( ReadLEB_i64(&sink, io_bytes, end) );
+                break;
+            }
+            case c_waOp_f32_const:
+            {
+                f32 sink;
+                _( Read_f32(&sink, io_bytes, end) );
+                break;
+            }
+            case c_waOp_f64_const:
+            {
+                f64 sink;
+                _( Read_f64(&sink, io_bytes, end) );
+                break;
+            }
+            default:
+            {
+                _throw(m3Err_wasmMalformed);
+            }
+        }
+    }
+
+    _catch: return result;
+}
+
+static M3Result
+SkipPastEndElse(bool* is_else, bytes_t *io_bytes, cbytes_t end)
+{
+    M3Result result = m3Err_none;  // TODO
+
+    _catch: return result;
+}
+
+static M3Result
+ParseBlockType(IM3FuncType * o_blockType,
+               bytes_t *io_bytes,
+               cbytes_t end,
+               IM3Module module)
+{
+    M3Result result = m3Err_none;
+
+    i64 type;
+    _( ReadLebSigned (& type, 33, io_bytes, end) );
+
+    if (type < 0)
+    {
+        u8 valueType;
+        _( NormalizeType (&valueType, type) );
+        *o_blockType = module->environment->retFuncTypes[valueType];
+    }
+
+    _catch: return result;
+}
+
+static M3Result
+ValidateFuncBody(M3Function function, IM3Module module)
+{
+    M3Result result = m3Err_none;
+
+    u8 local_types[d_m3MaxSaneLocalCount];
+    u32 total_locals;
+    bytes_t io_bytes = function.wasm;
+    cbytes_t end = function.wasmEnd;
+    {
+        IM3FuncType type = function.funcType;
+        u32 j = 0;
+        for (u32 i = type->numRets; i < type->numRets + type->numArgs; i++)
+        {
+            local_types[j] = type->types[i];
+            j++;
+        }
+        u32 num_local_blocks;
+        _( ReadLEB_u32(&num_local_blocks, &io_bytes, end) );
+
+        for (u32 i = 0; i < num_local_blocks; i++)
+        {
+            u32 num_locals;
+            i8 waType;
+            u8 type;
+            _( ReadLEB_u32(&num_locals, &io_bytes, end) );
+            _( ReadLEB_i7(&waType, &io_bytes, end) );
+            _( NormalizeType (&type, waType) );
+            for (u32 k = 0; k < num_locals; k++)
+            {
+                _throwif(m3Err_wasmMalformed, (j > d_m3MaxSaneLocalCount));
+                local_types[j] = type;
+                j++;
+            }
+        }
+        total_locals = j;
+    }
+
+    u8 type_stack[d_m3MaxSaneTypeStackSize];
+    Frame frames[d_m3MaxSaneFrameDepth];
+
+    u32 type_i = 0, frame_i = 0;
+    Frame frame_init = {bk_block, 0, 0, function.funcType};
+    frames[frame_i++] = frame_init;
+    while (frame_i)
+    {
+        m3opcode_t op;
+        u8 op_short;
+        _( Read_u8(&op_short, &io_bytes, end) );
+        if (op_short == 0xFC)
+        {
+            u8 fc_rest;
+            _( Read_u8(&fc_rest, &io_bytes, end) );
+            op = (op_short << 8) | fc_rest;
         }
         else
         {
-            chain->tail = next;
-            chain->head->next = next; // [head->NULL, NULL] -> [head->tail, tail]
+            op = op_short;
         }
-    }
-    else
-    {
-        chain->tail->next = next;
-        chain->tail = next;
-    }
-}
 
-static bool
-PopHead(WorkChain* chain, WorkItem* result)
-{
-    if (!chain->head)
-    {
-        return 0;
-    }
-    WorkNode* popped = chain->head;
-    *result = popped->item;
-    if (!chain->tail)
-    {
-        chain->head = NULL;
-    }
-    else if (chain->head->next == chain->tail)
-    {
-        chain->head = chain->tail;
-        chain->tail = NULL;
-    }
-    else
-    {
-        chain->head = popped->next;
-    }
-    m3_Free(popped);
-    return 1;
-}
-
-// transfer control of item
-//
-static M3Result
-ValidateExpression(WorkItem item, WorkChain* chain, u8* type_stack)
-{
-    M3Result result = m3Err_none;
-
-    //  iterate through opcodes, pushing/popping types on the stack
-    //  unconditional control transfer ops: consult frame list
-    //  push block ops to work chain
-    //  free item.frames when done
-
-    _catch: return result;
-}
-
-static M3Result
-SkipBlockBody(bytes_t * io_bytes, cbytes_t i_end)
-{
-    M3Result result = m3Err_none;
-
-    
-    
-    _catch: return result;
-}
-
-static M3Result
-ValidateFuncBody(
-    bytes_t wasm,
-    bytes_t wasm_end,
-    M3FuncType type,
-    IM3Module module)
-{
-    M3Result result = m3Err_none;
-    u8* type_stack = m3_Malloc(d_m3MaxSaneTypeStackSize);
-
-    _throwif(
-        m3Err_wasmMalformed,
-        (type.numRets + type.numArgs > d_m3MaxSaneLocalCount)
-    );
-    
-
-    u8 local_types[d_m3MaxSaneLocalCount];
-    u32 j = 0;
-    for (u32 i = type.numRets; i < type.numRets + type.numArgs; i++)
-    {
-        local_types[j] = type.types[i];
-        j++;
-    }
-    u32 num_local_blocks;
-    _( ReadLEB_u32(&num_local_blocks, &wasm, wasm_end) );
-
-    for (u32 i = 0; i < num_local_blocks; i++)
-    {
-        u32 num_locals;
-        i8 waType;
-        u8 type;
-        _( ReadLEB_u32(&num_locals, &wasm, wasm_end) );
-        _( ReadLEB_i7(&waType, &wasm, wasm_end) );
-        _( NormalizeType (&type, waType) );
-        for (u32 k = 0; k < num_locals; k++)
+        IM3OpInfo info = GetOpInfo(op);
+        if (info->typeSignature)
         {
-            _throwif(m3Err_wasmMalformed, (j > d_m3MaxSaneLocalCount));
-            local_types[j] = type;
-            j++;
+            ccstr_t signature = info->typeSignature;
+            {
+                u8 i_arg = info->numArgs;
+                while (i_arg--)
+                {
+                    _throwif(m3Err_wasmMalformed, (type_i == 0));
+
+                    u8 type_id = ConvertTypeCharToTypeId(signature[i_arg]);
+                    _throwif(
+                        m3Err_wasmMalformed,
+                        (type_stack[--type_i] != type_id)
+                    );
+                }
+            }
+            u8 num_tot = info->numArgs + info->numRets;
+            for (u8 i_ret = info->numArgs; i_ret < num_tot; i_ret++ )
+            {
+                _throwif(
+                    m3Err_wasmMalformed,
+                    (type_i >= d_m3MaxSaneTypeStackSize)
+                );
+                u8 type = ConvertTypeCharToTypeId(signature[i_ret]);
+                type_stack[type_i++] = type;
+            }
+            
+            i8 imm_args = info->numArgsImmediate;
+            if (imm_args != 0)
+            {
+                _(SkipImmediateArgs(op, imm_args, &io_bytes, end));
+            }
+        }
+        else
+        {
+            switch (op)
+            {
+                // "dynamic" types
+                case c_waOp_nop:
+                {
+                    continue;
+                }
+                case c_waOp_branchIf:
+                {
+                    _throwif(
+                        m3Err_wasmMalformed,
+                        ( (type_i == 0)
+                          || (type_stack[--type_i] != c_m3Type_i32)
+                        )
+                    );
+                    u32 depth;
+                    _( ReadLEB_u32(&depth, &io_bytes, end) );
+                    
+                    _throwif(m3Err_wasmMalformed, (depth >= frame_i));
+
+                    Frame frame = frames[frame_i-depth];
+
+                    if (frame.kind == bk_loop)
+                    {
+                        IM3FuncType blocktype = frame.blocktype;
+                        u16 numArgs = blocktype->numArgs;
+                        u16 numRets = blocktype->numRets;
+                        u16 arg_i = numArgs + numRets;
+                        u32 type_i_temp = type_i;
+                        u8 *types = blocktype->types;
+
+                        while ((arg_i--) > numRets)
+                        {
+                            _throwif(m3Err_wasmMalformed, type_i_temp == 0);
+                            _throwif(
+                                m3Err_wasmMalformed,
+                                type_stack[--type_i_temp] != types[arg_i]
+                            );
+                        }
+                    }
+                    else
+                    {
+                        IM3FuncType blocktype = frame.blocktype;
+                        u16 ret_i = blocktype->numRets;
+                        u32 type_i_temp = type_i;
+                        u8 *types = blocktype->types;
+
+                        while ((ret_i--) > 0)
+                        {
+                            _throwif(m3Err_wasmMalformed, type_i_temp == 0);
+                            _throwif(
+                                m3Err_wasmMalformed,
+                                type_stack[--type_i_temp] != types[ret_i]
+                            );
+                        }
+                    }
+
+                    continue;
+                }
+                case c_waOp_call:
+                {
+                    u32 func_idx;
+                    _( ReadLEB_u32(&func_idx, &io_bytes, end) );
+                    _throwif(
+                        m3Err_wasmMalformed,
+                        (func_idx >= module->numFunctions)
+                    );
+
+                    IM3FuncType functype = module->functions[func_idx].funcType;
+                    u16 numArgs = functype->numArgs;
+                    u16 numRets = functype->numRets;
+                    u8 *types = functype->types;
+                    u16 arg_i = numArgs + numRets;
+
+                    while ((arg_i--) > numRets)
+                    {
+                        _throwif(m3Err_wasmMalformed, type_i == 0);
+                        _throwif(
+                            m3Err_wasmMalformed,
+                            (type_stack[--type_i] != types[arg_i])
+                        );
+                    }
+                    for (u16 ret_i = 0; ret_i < numRets; ret_i++)
+                    {
+                        type_stack[type_i++] = types[ret_i];
+                    }
+                    
+                    continue;
+                }
+                case c_waOp_call_indirect:
+                {
+                    u32 type_idx, table_idx;
+                    _( ReadLEB_u32(&type_idx, &io_bytes, end) );
+                    _( ReadLEB_u32(&table_idx, &io_bytes, end) );
+
+                    _throwif(m3Err_wasmMalformed, table_idx != 0);  // only one table supported
+                    _throwif(m3Err_wasmMalformed, type_i == 0);
+                    _throwif(
+                        m3Err_wasmMalformed,
+                        (type_stack[--type_i] != c_m3Type_i32)
+                    );
+                    _throwif(
+                        m3Err_wasmMalformed,
+                        (type_idx >= module->numFuncTypes)
+                    );
+                    IM3FuncType functype = module->funcTypes[type_idx];
+                    u16 numArgs = functype->numArgs;
+                    u16 numRets = functype->numRets;
+                    u8 *types = functype->types;
+                    u16 arg_i = numArgs + numRets;
+
+                    while ((arg_i--) > numRets)
+                    {
+                        _throwif(m3Err_wasmMalformed, type_i == 0);
+                        _throwif(
+                            m3Err_wasmMalformed,
+                            (type_stack[--type_i] != types[arg_i])
+                        );
+                    }
+                    for (u16 ret_i = 0; ret_i < numRets; ret_i++)
+                    {
+                        type_stack[type_i++] = types[ret_i];
+                    }
+                    
+                    continue;
+                }
+                case c_waOp_drop:
+                {
+                    _throwif(m3Err_wasmMalformed, (type_i--) == 0);
+                    continue;
+                }
+                case c_waOp_select:
+                {
+                    _throwif(m3Err_wasmMalformed, type_i < 3);
+                    _throwif(
+                        m3Err_wasmMalformed,
+                        (type_stack[--type_i] != c_m3Type_i32)
+                    );
+                    u8 t1 = type_stack[--type_i];
+                    u8 t2 = type_stack[--type_i];
+
+                    _throwif(m3Err_wasmMalformed, (t1 != t2));
+
+                    continue;
+                }
+                case c_waOp_getLocal:
+                {
+                    u32 local_idx;
+                    _( ReadLEB_u32(&local_idx, &io_bytes, end) );
+
+                    _throwif(m3Err_wasmMalformed, local_idx >= total_locals);
+
+                    type_stack[type_i++] = local_types[local_idx];
+
+                    continue;
+                }
+                case c_waOp_setLocal:
+                {
+                    u32 local_idx;
+                    _( ReadLEB_u32(&local_idx, &io_bytes, end) );
+
+                    _throwif(m3Err_wasmMalformed, local_idx >= total_locals);
+
+                    _throwif(m3Err_wasmMalformed, type_i == 0);
+
+                    _throwif(
+                        m3Err_wasmMalformed,
+                        (type_stack[--type_i] != local_types[local_idx])
+                    );
+
+                    continue;
+                }
+                case c_waOp_teeLocal:
+                {
+                    u32 local_idx;
+                    _( ReadLEB_u32(&local_idx, &io_bytes, end) );
+
+                    _throwif(m3Err_wasmMalformed, local_idx >= total_locals);
+
+                    _throwif(m3Err_wasmMalformed, type_i == 0);
+
+                    _throwif(
+                        m3Err_wasmMalformed,
+                        (type_stack[type_i-1] != local_types[local_idx])
+                    );
+
+                    continue;
+                }
+                case c_waOp_getGlobal:
+                {
+                    u32 global_idx;
+                    _( ReadLEB_u32(&global_idx, &io_bytes, end) );
+
+                    _throwif(
+                        m3Err_wasmMalformed,
+                        (global_idx >= module->numGlobals)
+                    );
+
+                    M3Global global = module->globals[global_idx];
+                    type_stack[type_i++] = global.type;
+
+                    continue;
+                }
+                case c_waOp_setGlobal:
+                {
+                    u32 global_idx;
+                    _( ReadLEB_u32(&global_idx, &io_bytes, end) );
+
+                    _throwif(
+                        m3Err_wasmMalformed,
+                        (global_idx >= module->numGlobals)
+                    );
+
+                    M3Global global = module->globals[global_idx];
+
+                    _throwif(m3Err_wasmMalformed, !global.isMutable);
+
+                    _throwif(m3Err_wasmMalformed, type_i == 0);
+
+                    _throwif(
+                        m3Err_wasmMalformed,
+                        (type_stack[--type_i] != global.type)
+                    );
+
+                    continue;
+                }
+
+                // control: leave frame
+                case c_waOp_unreachable:
+                {
+                    // go to the end of current block
+                    bool is_else;
+                    _( SkipPastEndElse(&is_else, &io_bytes, end) );
+
+                    if (is_else) // switch the frame
+                    {
+                        u32 now_i = frame_i - 1;
+                        bool frame_is_if = (bk_if == frames[now_i].kind);
+                        bool frame_true_branch = frames[now_i].is_true_branch;
+                        _throwif(
+                            m3Err_wasmMalformed,
+                            !(frame_is_if && frame_true_branch)
+                        );
+                        frames[now_i].is_true_branch = 0;
+                        type_i = frames[now_i].base_i;
+
+                        continue;
+                    }
+                    else
+                    {
+                        Frame popped = frames[--frame_i];
+                        type_i = popped.base_i;
+                        
+                        u32 numRets = popped.blocktype->numRets;
+                        u8 *types = popped.blocktype->types;
+                        for (u32 i = 0; i < numRets; i++)
+                        {
+                            type_stack[type_i++] = types[i];
+                        }
+
+                        continue;
+                    }
+                }
+                case c_waOp_else:
+                {
+                    Frame *now = &frames[frame_i-1];
+                    bool frame_is_if = (bk_if == now->kind);
+                    bool frame_true_branch = now->is_true_branch;
+                    _throwif(
+                        m3Err_wasmMalformed,
+                        !(frame_is_if && frame_true_branch)
+                    );
+                    _throwif(m3Err_wasmMalformed, (type_i < now->base_i));
+                    u16 numRets = now->blocktype->numRets;
+                    u8* types = now->blocktype->types;
+                    u16 ret_i = numRets;
+                    while (ret_i--)
+                    {
+                        _throwif(
+                            m3Err_wasmMalformed,
+                            types[ret_i] != type_stack[--type_i]
+                        );
+                    }
+                    _throwif(m3Err_wasmMalformed, (type_i != now->base_i));
+                    now->is_true_branch = 0;
+
+                    continue;
+                }
+                case c_waOp_end:
+                {
+                    Frame popped = frames[--frame_i];
+                    _throwif(m3Err_wasmMalformed, (type_i < popped.base_i));
+                    u16 numRets = popped.blocktype->numRets;
+                    u8* types = popped.blocktype->types;
+                    u16 ret_i = numRets;
+                    while (ret_i--)
+                    {
+                        _throwif(
+                            m3Err_wasmMalformed,
+                            types[ret_i] != type_stack[--type_i]
+                        );
+                    }
+                    _throwif(m3Err_wasmMalformed, (type_i != popped.base_i));
+
+                    continue;
+                }
+                case c_waOp_branch:
+                {
+                    u32 depth;
+                    _( ReadLEB_u32(&depth, &io_bytes, end) );
+
+                    _throwif(m3Err_wasmMalformed, (depth >= frame_i));
+
+                    Frame frame = frames[frame_i-depth];
+
+                    if (frame.kind == bk_loop)
+                    {
+                        IM3FuncType blocktype = frame.blocktype;
+                        u16 numArgs = blocktype->numArgs;
+                        u16 numRets = blocktype->numRets;
+                        u16 arg_i = numArgs + numRets;
+                        u32 type_i_temp = type_i;
+                        u8 *types = blocktype->types;
+
+                        while ((arg_i--) > numRets)
+                        {
+                            _throwif(m3Err_wasmMalformed, type_i_temp == 0);
+                            _throwif(
+                                m3Err_wasmMalformed,
+                                type_stack[--type_i_temp] != types[arg_i]
+                            );
+                        }
+                    }
+                    else
+                    {
+                        IM3FuncType blocktype = frame.blocktype;
+                        u16 ret_i = blocktype->numRets;
+                        u32 type_i_temp = type_i;
+                        u8 *types = blocktype->types;
+
+                        while ((ret_i--) > 0)
+                        {
+                            _throwif(m3Err_wasmMalformed, type_i_temp == 0);
+                            _throwif(
+                                m3Err_wasmMalformed,
+                                type_stack[--type_i_temp] != types[ret_i]
+                            );
+                        }
+                    }
+
+                    // go to the end of the current block
+                    bool is_else;
+                    _( SkipPastEndElse(&is_else, &io_bytes, end) );
+
+                    if (is_else) // switch the frame
+                    {
+                        u32 now_i = frame_i - 1;
+                        bool frame_is_if = (bk_if == frames[now_i].kind);
+                        bool frame_true_branch = frames[now_i].is_true_branch;
+                        _throwif(
+                            m3Err_wasmMalformed,
+                            !(frame_is_if && frame_true_branch)
+                        );
+                        frames[now_i].is_true_branch = 0;
+                        type_i = frames[now_i].base_i;
+                        continue;
+                    }
+                    else
+                    {
+                        Frame popped = frames[--frame_i];
+                        type_i = popped.base_i;
+                        
+                        u32 numRets = popped.blocktype->numRets;
+                        u8 *types = popped.blocktype->types;
+                        for (u32 i = 0; i < numRets; i++)
+                        {
+                            type_stack[type_i++] = types[i];
+                        }
+                        continue;
+                    }
+                }
+                case c_waOp_branchTable:
+                {
+                    u32 n_depths;
+                    _( ReadLEB_u32(&(n_depths), &io_bytes, end) );
+                    n_depths++;
+
+                    for (u32 i = 0; i < n_depths; i++)
+                    {
+                        u32 depth;
+                        _( ReadLEB_u32(&depth, &io_bytes, end) );
+                        _throwif(m3Err_wasmMalformed, (depth >= frame_i));
+
+                        Frame frame = frames[frame_i-depth];
+
+                        if (frame.kind == bk_loop)
+                        {
+                            IM3FuncType blocktype = frame.blocktype;
+                            u16 numArgs = blocktype->numArgs;
+                            u16 numRets = blocktype->numRets;
+                            u16 arg_i = numArgs + numRets;
+                            u32 type_i_temp = type_i;
+                            u8 *types = blocktype->types;
+
+                            while ((arg_i--) > numRets)
+                            {
+                                _throwif(m3Err_wasmMalformed, type_i_temp == 0);
+                                _throwif(
+                                    m3Err_wasmMalformed,
+                                    type_stack[--type_i_temp] != types[arg_i]
+                                );
+                            }
+                        }
+                        else
+                        {
+                            IM3FuncType blocktype = frame.blocktype;
+                            u16 ret_i = blocktype->numRets;
+                            u32 type_i_temp = type_i;
+                            u8 *types = blocktype->types;
+
+                            while ((ret_i--) > 0)
+                            {
+                                _throwif(m3Err_wasmMalformed, type_i_temp == 0);
+                                _throwif(
+                                    m3Err_wasmMalformed,
+                                    type_stack[--type_i_temp] != types[ret_i]
+                                );
+                            }
+                        }
+                    }
+
+                    // go to the end of the current block
+                    bool is_else;
+                    _( SkipPastEndElse(&is_else, &io_bytes, end) );
+
+                    if (is_else) // switch the frame
+                    {
+                        u32 now_i = frame_i - 1;
+                        bool frame_is_if = (bk_if == frames[now_i].kind);
+                        bool frame_true_branch = frames[now_i].is_true_branch;
+                        _throwif(
+                            m3Err_wasmMalformed,
+                            !(frame_is_if && frame_true_branch)
+                        );
+                        frames[now_i].is_true_branch = 0;
+                        type_i = frames[now_i].base_i;
+
+                        continue;
+                    }
+                    else
+                    {
+                        Frame popped = frames[--frame_i];
+                        type_i = popped.base_i;
+                        
+                        u32 numRets = popped.blocktype->numRets;
+                        u8 *types = popped.blocktype->types;
+                        for (u32 i = 0; i < numRets; i++)
+                        {
+                            type_stack[type_i++] = types[i];
+                        }
+
+                        continue;
+                    }
+                }
+                case c_waOp_return:
+                {
+                    Frame frame = frames[0];
+                    IM3FuncType blocktype = frame.blocktype;
+                    u16 ret_i = blocktype->numRets;
+                    u32 type_i_temp = type_i;
+                    u8 *types = blocktype->types;
+
+                    while ((ret_i--) > 0)
+                    {
+                        _throwif(m3Err_wasmMalformed, type_i_temp == 0);
+                        _throwif(
+                            m3Err_wasmMalformed,
+                            type_stack[--type_i_temp] != types[ret_i]
+                        );
+                    }
+
+                    // go to the end of the current block
+                    bool is_else;
+                    _( SkipPastEndElse(&is_else, &io_bytes, end) );
+
+                    if (is_else) // switch the frame
+                    {
+                        u32 now_i = frame_i - 1;
+                        bool frame_is_if = (bk_if == frames[now_i].kind);
+                        bool frame_true_branch = frames[now_i].is_true_branch;
+                        _throwif(
+                            m3Err_wasmMalformed,
+                            !(frame_is_if && frame_true_branch)
+                        );
+                        frames[now_i].is_true_branch = 0;
+                        type_i = frames[now_i].base_i;
+                        continue;
+                    }
+                    else
+                    {
+                        Frame popped = frames[--frame_i];
+                        type_i = popped.base_i;
+                        
+                        u32 numRets = popped.blocktype->numRets;
+                        u8 *types = popped.blocktype->types;
+                        for (u32 i = 0; i < numRets; i++)
+                        {
+                            type_stack[type_i++] = types[i];
+                        }
+                        continue;
+                    }
+                }
+                
+
+                // control: enter frame
+                case c_waOp_block:
+                {
+                    IM3FuncType blocktype;
+                    _( ParseBlockType(&blocktype, &io_bytes, end, module) );
+
+                    u16 numArgs = blocktype->numArgs;
+                    u16 numRets = blocktype->numRets;
+                    u8 *types = blocktype->types;
+                    u16 arg_i = numArgs + numRets;
+                    while ((arg_i--) > numRets) 
+                    {
+                        _throwif(m3Err_wasmMalformed, type_i == 0);
+                        _throwif(
+                            m3Err_wasmMalformed,
+                            type_stack[--type_i] != types[arg_i]
+                        );
+                    }
+
+                    Frame new = {bk_block, 0, type_i, blocktype};
+                    frames[frame_i++] = new;
+                }
+                case c_waOp_loop:
+                {
+                    IM3FuncType blocktype;
+                    _( ParseBlockType(&blocktype, &io_bytes, end, module) );
+
+                    u16 numArgs = blocktype->numArgs;
+                    u16 numRets = blocktype->numRets;
+                    u8 *types = blocktype->types;
+                    u16 arg_i = numArgs + numRets;
+                    while ((arg_i--) > numRets) 
+                    {
+                        _throwif(m3Err_wasmMalformed, type_i == 0);
+                        _throwif(
+                            m3Err_wasmMalformed,
+                            type_stack[--type_i] != types[arg_i]
+                        );
+                    }
+
+                    Frame new = {bk_loop, 0, type_i, blocktype};
+                    frames[frame_i++] = new;
+                }
+                case c_waOp_if:
+                {
+                    IM3FuncType blocktype;
+                    _( ParseBlockType(&blocktype, &io_bytes, end, module) );
+
+                    u16 numArgs = blocktype->numArgs;
+                    u16 numRets = blocktype->numRets;
+                    u8 *types = blocktype->types;
+                    u16 arg_i = numArgs + numRets;
+                    while ((arg_i--) > numRets) 
+                    {
+                        _throwif(m3Err_wasmMalformed, type_i == 0);
+                        _throwif(
+                            m3Err_wasmMalformed,
+                            type_stack[--type_i] != types[arg_i]
+                        );
+                    }
+
+                    Frame new = {bk_if, 1, type_i, blocktype};
+                    frames[frame_i++] = new;
+                }
+
+                // weird: not covered by the formal spec
+                case c_waOp_return_call:
+                case c_waOp_return_call_indirect:
+                {
+                    _throw(m3Err_wasmMalformed);
+                }
+                default:
+                {
+                    _throw(m3Err_wasmMalformed);
+                }
+            }
         }
     }
-    FrameLL* init_frame = m3_Malloc(sizeof(*init_frame));
-    init_frame->numRets = type.numRets;
-    init_frame->numArgs = type.numArgs;
-    init_frame->types = type.types;
-    init_frame->next = NULL;
 
-    WorkNode* init_node = m3_Malloc(sizeof(*init_node));
-    WorkItem init_item = {wasm, wasm_end, init_frame};
-    init_node->item = init_item;
-    init_node->next = NULL;
-
-    WorkChain chain = {init_node, NULL};
-    
-    while (chain.head)
-    {
-        WorkItem item;
-        PopHead(&chain, &item);
-        _( ValidateExpression(item, &chain, type_stack) );  //  item transfer
-    }
-
-    _catch: {
-        //  the workchain is either empty or the validation failed
-        //  and the memory is going to be reclaimed soon
-        //
-        m3_Free(type_stack);
-        return result;
-    }
+    _catch: return result;
 }
+
 
 static M3Result
 ValidateCode(IM3Module module)
@@ -363,7 +980,7 @@ ValidateCode(IM3Module module)
     {
         M3Function function = module->functions[i];
         M3FuncType type = *function.funcType;
-        _( ValidateFuncBody(function.wasm, function.wasmEnd, type, module) );
+        _( ValidateFuncBody(function, module) );
     }
 
     _catch: return result;
