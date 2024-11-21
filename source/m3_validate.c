@@ -194,7 +194,14 @@ typedef struct Frame {
     IM3FuncType blocktype;
 } Frame;
 
-// only defined for ops with non-NULL signatures
+static M3Result
+SkipPastEndElse(bool* is_else, bytes_t *io_bytes, cbytes_t end)
+{
+    M3Result result = m3Err_none;  // TODO
+
+    _catch: return result;
+}
+
 static M3Result
 SkipImmediateArgs(m3opcode_t op,
   i8 numArgsImmediate,
@@ -239,20 +246,49 @@ SkipImmediateArgs(m3opcode_t op,
                 _( Read_f64(&sink, io_bytes, end) );
                 break;
             }
+            case c_waOp_block:
+            case c_waOp_loop:
+            {
+                i64 sink;
+                _( ReadLebSigned (& sink, 33, io_bytes, end) );
+                bool is_else;
+                _( SkipPastEndElse(&is_else, io_bytes, end) );
+                _throwif(m3Err_wasmMalformed, is_else);
+                break;
+            }
+            case c_waOp_if:
+            {
+                i64 sink;
+                _( ReadLebSigned (& sink, 33, io_bytes, end) );
+                bool is_else;
+                _( SkipPastEndElse(&is_else, io_bytes, end) );
+                if (is_else)
+                {
+                    _( SkipPastEndElse(&is_else, io_bytes, end) );
+                    _throwif(m3Err_wasmMalformed, is_else);
+                }
+                break;
+            }
+            case c_waOp_branchTable:
+            {
+                u32 n_depths;
+                _( ReadLEB_u32(&(n_depths), io_bytes, end) );
+                n_depths++;
+
+                for (u32 i = 0; i < n_depths; i++)
+                {
+                    u32 sink;
+                    _( ReadLEB_u32(&sink, io_bytes, end) );
+                }
+                break;
+            }
+            // else, end are skipped as part of an expression
             default:
             {
                 _throw(m3Err_wasmMalformed);
             }
         }
     }
-
-    _catch: return result;
-}
-
-static M3Result
-SkipPastEndElse(bool* is_else, bytes_t *io_bytes, cbytes_t end)
-{
-    M3Result result = m3Err_none;  // TODO
 
     _catch: return result;
 }
@@ -739,7 +775,6 @@ ValidateFuncBody(M3Function function, IM3Module module)
                         );
                         frames[now_i].is_true_branch = 0;
                         type_i = frames[now_i].base_i;
-                        continue;
                     }
                     else
                     {
@@ -752,8 +787,8 @@ ValidateFuncBody(M3Function function, IM3Module module)
                         {
                             type_stack[type_i++] = types[i];
                         }
-                        continue;
                     }
+                    continue;
                 }
                 case c_waOp_branchTable:
                 {
@@ -821,7 +856,6 @@ ValidateFuncBody(M3Function function, IM3Module module)
                         frames[now_i].is_true_branch = 0;
                         type_i = frames[now_i].base_i;
 
-                        continue;
                     }
                     else
                     {
@@ -835,8 +869,8 @@ ValidateFuncBody(M3Function function, IM3Module module)
                             type_stack[type_i++] = types[i];
                         }
 
-                        continue;
                     }
+                    continue;
                 }
                 case c_waOp_return:
                 {
@@ -870,7 +904,6 @@ ValidateFuncBody(M3Function function, IM3Module module)
                         );
                         frames[now_i].is_true_branch = 0;
                         type_i = frames[now_i].base_i;
-                        continue;
                     }
                     else
                     {
@@ -883,8 +916,8 @@ ValidateFuncBody(M3Function function, IM3Module module)
                         {
                             type_stack[type_i++] = types[i];
                         }
-                        continue;
                     }
+                    continue;
                 }
                 
 
@@ -909,6 +942,7 @@ ValidateFuncBody(M3Function function, IM3Module module)
 
                     Frame new = {bk_block, 0, type_i, blocktype};
                     frames[frame_i++] = new;
+                    continue;
                 }
                 case c_waOp_loop:
                 {
@@ -930,6 +964,7 @@ ValidateFuncBody(M3Function function, IM3Module module)
 
                     Frame new = {bk_loop, 0, type_i, blocktype};
                     frames[frame_i++] = new;
+                    continue;
                 }
                 case c_waOp_if:
                 {
@@ -951,6 +986,7 @@ ValidateFuncBody(M3Function function, IM3Module module)
 
                     Frame new = {bk_if, 1, type_i, blocktype};
                     frames[frame_i++] = new;
+                    continue;
                 }
 
                 // weird: not covered by the formal spec
