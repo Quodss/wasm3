@@ -1004,12 +1004,10 @@ ValidateData(IM3Module module)
         bytes_t i_bytes = data_segment.initExpr;
         bytes_t end = data_segment.initExpr + data_segment.initExprSize;
 
-        u8 op;
-        _( Read_u8(&op, &i_bytes, end) );
-        _throwif(m3Err_wasmMalformed, (op != c_waOp_i32_const));
+        i32 offset;
+        _( EvaluateExpression (module, &offset, c_m3Type_i32, &i_bytes, end) );
 
-        i32 _discard;
-        _( ReadLEB_i32(&_discard, &i_bytes, end) );
+        _throwif(m3Err_wasmMalformed, offset < 0);
     }
     
     _catch: return result;
