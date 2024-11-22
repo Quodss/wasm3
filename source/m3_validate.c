@@ -780,9 +780,9 @@ ValidateFuncBody(M3Function function, IM3Module module)
                                 (type_i >= d_m3MaxSaneTypeStackSize             \
                                            - d_m3MaxSaneFunctionArgRetCount)    \
                             );                                                  \
-                            for (u32 i = 0; i < numRets; i++)                   \
+                            for (u32 ret_i = 0; ret_i < numRets; ret_i++)       \
                             {                                                   \
-                                type_stack[type_i++] = types[i];                \
+                                type_stack[type_i++] = types[ret_i];            \
                             }                                                   \
                         }                                                       \
                     } while (0)
@@ -802,7 +802,9 @@ ValidateFuncBody(M3Function function, IM3Module module)
                         !(frame_is_if && frame_true_branch)
                     );
                     _throwif("weird stack", (type_i < now->base_i));
+                    u16 numArgs = now->blocktype->numArgs;
                     u16 numRets = now->blocktype->numRets;
+                    u16 numTot = numArgs + numRets;
                     u8* types = now->blocktype->types;
                     u16 ret_i = numRets;
                     while (ret_i--)
@@ -815,6 +817,10 @@ ValidateFuncBody(M3Function function, IM3Module module)
                     }
                     _throwif("else wrong count", (type_i != now->base_i));
                     now->is_true_branch = 0;
+                    for (u32 arg_i = numRets; arg_i < numTot; arg_i++)
+                    {                                                 
+                        type_stack[type_i++] = types[arg_i];          
+                    }                                                 
 
                     continue;
                 }
