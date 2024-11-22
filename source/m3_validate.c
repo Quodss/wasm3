@@ -1,14 +1,10 @@
-#include "wasm3.h"
 #include "m3_exception.h"
 #include "m3_compile.h"
 #include "m3_env.h"
 #include "m3_bind.h"
 
-static M3Result
-ValidateFunctions(IM3Module module)
-{
-    return m3Err_none;  //  parser already checked functypes
-}
+#include "m3_validate.h"
+
 
 static M3Result
 ValidateTables(IM3Module module)
@@ -140,26 +136,26 @@ ValidateElem(IM3Module module)
     M3Result result = m3Err_none;
     bytes_t i_bytes = module->elementSection;
     bytes_t end = module->elementSectionEnd;
-    u8 label;
-    _( Read_u8(&label, &i_bytes, end) );
-    _throwif(m3Err_wasmMalformed, label);
-    
-    u8 op;
-    _( Read_u8(&op, &i_bytes, end) );
-    _throwif(m3Err_wasmMalformed, (op != c_waOp_i32_const));
-
-    i32 _discard;
-    _( ReadLEB_i32(&_discard, &i_bytes, end) );
-
-    u32 num_idxes;
-    _( ReadLEB_u32(&num_idxes, &i_bytes, end) );
-
-    while (num_idxes--)
+    for (u32 i = 0; i < module->numElementSegments; ++i)
     {
-        u32 func_idx;
-        _( ReadLEB_u32(&func_idx, &i_bytes, end) );
+        u8 label;
+        _( Read_u8(&label, &i_bytes, end) );
+        _throwif(m3Err_wasmMalformed, label);
+        
+        i32 offset;
+        _( EvaluateExpression (module, &offset, c_m3Type_i32, &i_bytes, end) );
+        _throwif (m3Err_wasmMalformed, offset < 0);
 
-        _throwif(m3Err_wasmMalformed, func_idx >= module->numFunctions);
+        u32 numElements;
+        _( ReadLEB_u32(&numElements, &i_bytes, end) );
+
+        while (numElements--)
+        {
+            u32 func_idx;
+            _( ReadLEB_u32(&func_idx, &i_bytes, end) );
+
+            _throwif(m3Err_wasmMalformed, func_idx >= module->numFunctions);
+        }
     }
 
     _catch: return result;
@@ -194,19 +190,63 @@ typedef struct Frame {
     IM3FuncType blocktype;
 } Frame;
 
+//  forward declare mutually recursive function
+static M3Result
+SkipImmediateArgs(m3opcode_t op,
+                  i8 numArgsImmediate,
+                  bytes_t *io_bytes,
+                  cbytes_t end
+);
+
 static M3Result
 SkipPastEndElse(bool* is_else, bytes_t *io_bytes, cbytes_t end)
 {
-    M3Result result = m3Err_none;  // TODO
+    M3Result result = m3Err_none;
+    while (1)
+    {
+        m3opcode_t op;
+        u8 op_short;
+        _( Read_u8(&op_short, io_bytes, end) );
+        if (op_short == 0xFC)
+        {
+            u8 fc_rest;
+            _( Read_u8(&fc_rest, io_bytes, end) );
+            op = (op_short << 8) | fc_rest;
+        }
+        else
+        {
+            op = op_short;
+        }
+
+        if (op == c_waOp_else)
+        {
+            *is_else = 1;
+            return m3Err_none;
+        }
+        else if (op == c_waOp_end)
+        {
+            *is_else = 0;
+            return m3Err_none;
+        }
+        
+        IM3OpInfo info = GetOpInfo(op);
+        _throwif("no info", !info);
+
+        i8 imm_args = info->numArgsImmediate;
+        if (imm_args != 0)
+        {
+            _( SkipImmediateArgs(op, imm_args, io_bytes, end) );
+        }
+    }
 
     _catch: return result;
 }
 
 static M3Result
 SkipImmediateArgs(m3opcode_t op,
-  i8 numArgsImmediate,
-  bytes_t *io_bytes,
-  cbytes_t end)
+                  i8 numArgsImmediate,
+                  bytes_t *io_bytes,
+                  cbytes_t end)
 {
     M3Result result = m3Err_none;
 
@@ -253,7 +293,7 @@ SkipImmediateArgs(m3opcode_t op,
                 _( ReadLebSigned (& sink, 33, io_bytes, end) );
                 bool is_else;
                 _( SkipPastEndElse(&is_else, io_bytes, end) );
-                _throwif(m3Err_wasmMalformed, is_else);
+                _throwif("unbalanced else", is_else);
                 break;
             }
             case c_waOp_if:
@@ -265,7 +305,7 @@ SkipImmediateArgs(m3opcode_t op,
                 if (is_else)
                 {
                     _( SkipPastEndElse(&is_else, io_bytes, end) );
-                    _throwif(m3Err_wasmMalformed, is_else);
+                    _throwif("unbalanced else", is_else);
                 }
                 break;
             }
@@ -285,7 +325,7 @@ SkipImmediateArgs(m3opcode_t op,
             // else, end are skipped as part of an expression
             default:
             {
-                _throw(m3Err_wasmMalformed);
+                _throw("else or end in skip immediate?");
             }
         }
     }
@@ -323,12 +363,20 @@ ValidateFuncBody(M3Function function, IM3Module module)
     u32 total_locals;
     bytes_t io_bytes = function.wasm;
     cbytes_t end = function.wasmEnd;
+
+    {   //  skip size
+        u32 size;
+        _( ReadLEB_u32(&size, &io_bytes, end) );
+    }
     {
         IM3FuncType type = function.funcType;
         u32 j = 0;
-        for (u32 i = type->numRets; i < type->numRets + type->numArgs; i++)
+        u32 numArgs = type->numArgs;
+        u32 numRets = type->numRets;
+        u8 *types = type->types;
+        for (u32 arg_i = numRets; arg_i < (numRets + numArgs); arg_i++)
         {
-            local_types[j] = type->types[i];
+            local_types[j] = types[arg_i];
             j++;
         }
         u32 num_local_blocks;
@@ -344,7 +392,7 @@ ValidateFuncBody(M3Function function, IM3Module module)
             _( NormalizeType (&type, waType) );
             for (u32 k = 0; k < num_locals; k++)
             {
-                _throwif(m3Err_wasmMalformed, (j > d_m3MaxSaneLocalCount));
+                _throwif("insane locals", (j > d_m3MaxSaneLocalCount));
                 local_types[j] = type;
                 j++;
             }
@@ -352,8 +400,8 @@ ValidateFuncBody(M3Function function, IM3Module module)
         total_locals = j;
     }
 
-    u8 type_stack[d_m3MaxSaneTypeStackSize];
-    Frame frames[d_m3MaxSaneFrameDepth];
+    u8 type_stack[d_m3MaxSaneTypeStackSize] = {0};
+    Frame frames[d_m3MaxSaneFrameDepth] = {0};
 
     u32 type_i = 0, frame_i = 0;
     Frame frame_init = {bk_block, 0, 0, function.funcType};
@@ -375,18 +423,20 @@ ValidateFuncBody(M3Function function, IM3Module module)
         }
 
         IM3OpInfo info = GetOpInfo(op);
+        _throwif("no info", !info);
         if (info->typeSignature)
         {
             ccstr_t signature = info->typeSignature;
+            Frame now = frames[frame_i - 1];
             {
                 u8 i_arg = info->numArgs;
                 while (i_arg--)
                 {
-                    _throwif(m3Err_wasmMalformed, (type_i == 0));
+                    _throwif("stack empty", (type_i == now.base_i));
 
                     u8 type_id = ConvertTypeCharToTypeId(signature[i_arg]);
                     _throwif(
-                        m3Err_wasmMalformed,
+                        "type mismatch",
                         (type_stack[--type_i] != type_id)
                     );
                 }
@@ -395,7 +445,7 @@ ValidateFuncBody(M3Function function, IM3Module module)
             for (u8 i_ret = info->numArgs; i_ret < num_tot; i_ret++ )
             {
                 _throwif(
-                    m3Err_wasmMalformed,
+                    "insane stack",
                     (type_i >= d_m3MaxSaneTypeStackSize)
                 );
                 u8 type = ConvertTypeCharToTypeId(signature[i_ret]);
@@ -413,59 +463,75 @@ ValidateFuncBody(M3Function function, IM3Module module)
             switch (op)
             {
                 // "dynamic" types
+                #define READ_DEPTH_TEST                                         \
+                    do {                                                        \
+                        u32 depth;                                              \
+                        _( ReadLEB_u32(&depth, &io_bytes, end) );               \
+                        _throwif("out of depth", (depth >= frame_i));           \
+                        Frame frame = frames[frame_i - depth - 1];              \
+                        Frame now = frames[frame_i - 1];                        \
+                        IM3FuncType blocktype = frame.blocktype;                \
+                        if (frame.kind == bk_loop)                              \
+                        {                                                       \
+                            u16 numArgs = blocktype->numArgs;                   \
+                            u16 numRets = blocktype->numRets;                   \
+                            u16 arg_i = numArgs + numRets;                      \
+                            u32 type_i_temp = type_i;                           \
+                            u8 *types = blocktype->types;                       \
+                            _throwif(                                           \
+                                "weird stack",                                  \
+                                type_i_temp < now.base_i                        \
+                            );                                                  \
+                            while ((arg_i--) > numRets)                         \
+                            {                                                   \
+                                _throwif(                                       \
+                                    "out of stack",                             \
+                                    type_i_temp == now.base_i                   \
+                                );                                              \
+                                _throwif(                                       \
+                                    "branch type mismatch",                     \
+                                    type_stack[--type_i_temp] != types[arg_i]   \
+                                );                                              \
+                            }                                                   \
+                        }                                                       \
+                        else                                                    \
+                        {                                                       \
+                            u16 ret_i = blocktype->numRets;                     \
+                            u32 type_i_temp = type_i;                           \
+                            u8 *types = blocktype->types;                       \
+                            _throwif(                                           \
+                                "weird stack",                                  \
+                                type_i_temp < now.base_i                        \
+                            );                                                  \
+                            while ((ret_i--) > 0)                               \
+                            {                                                   \
+                                _throwif(                                       \
+                                    "out of stack",                             \
+                                    type_i_temp == now.base_i                   \
+                                );                                              \
+                                _throwif(                                       \
+                                    "branch type mismatch",                     \
+                                    type_stack[--type_i_temp] != types[ret_i]   \
+                                );                                              \
+                            }                                                   \
+                        }                                                       \
+                    } while (0)
+
                 case c_waOp_nop:
                 {
                     continue;
                 }
                 case c_waOp_branchIf:
                 {
+                    Frame now = frames[frame_i - 1];
                     _throwif(
-                        m3Err_wasmMalformed,
-                        ( (type_i == 0)
+                        "branch if no i32",
+                        ( (type_i <= now.base_i)
                           || (type_stack[--type_i] != c_m3Type_i32)
                         )
                     );
-                    u32 depth;
-                    _( ReadLEB_u32(&depth, &io_bytes, end) );
                     
-                    _throwif(m3Err_wasmMalformed, (depth >= frame_i));
-
-                    Frame frame = frames[frame_i-depth];
-
-                    if (frame.kind == bk_loop)
-                    {
-                        IM3FuncType blocktype = frame.blocktype;
-                        u16 numArgs = blocktype->numArgs;
-                        u16 numRets = blocktype->numRets;
-                        u16 arg_i = numArgs + numRets;
-                        u32 type_i_temp = type_i;
-                        u8 *types = blocktype->types;
-
-                        while ((arg_i--) > numRets)
-                        {
-                            _throwif(m3Err_wasmMalformed, type_i_temp == 0);
-                            _throwif(
-                                m3Err_wasmMalformed,
-                                type_stack[--type_i_temp] != types[arg_i]
-                            );
-                        }
-                    }
-                    else
-                    {
-                        IM3FuncType blocktype = frame.blocktype;
-                        u16 ret_i = blocktype->numRets;
-                        u32 type_i_temp = type_i;
-                        u8 *types = blocktype->types;
-
-                        while ((ret_i--) > 0)
-                        {
-                            _throwif(m3Err_wasmMalformed, type_i_temp == 0);
-                            _throwif(
-                                m3Err_wasmMalformed,
-                                type_stack[--type_i_temp] != types[ret_i]
-                            );
-                        }
-                    }
+                    READ_DEPTH_TEST;
 
                     continue;
                 }
@@ -474,7 +540,7 @@ ValidateFuncBody(M3Function function, IM3Module module)
                     u32 func_idx;
                     _( ReadLEB_u32(&func_idx, &io_bytes, end) );
                     _throwif(
-                        m3Err_wasmMalformed,
+                        "call idx out of range",
                         (func_idx >= module->numFunctions)
                     );
 
@@ -483,15 +549,22 @@ ValidateFuncBody(M3Function function, IM3Module module)
                     u16 numRets = functype->numRets;
                     u8 *types = functype->types;
                     u16 arg_i = numArgs + numRets;
+                    Frame now = frames[frame_i - 1];
+                    _throwif("weird stack", type_i < now.base_i);
 
                     while ((arg_i--) > numRets)
                     {
-                        _throwif(m3Err_wasmMalformed, type_i == 0);
+                        _throwif("out of stack", type_i == now.base_i);
                         _throwif(
-                            m3Err_wasmMalformed,
+                            "call wrong type",
                             (type_stack[--type_i] != types[arg_i])
                         );
                     }
+                    _throwif(
+                        "insane stack",
+                        (type_i >= d_m3MaxSaneTypeStackSize
+                                   - d_m3MaxSaneFunctionArgRetCount)
+                    );
                     for (u16 ret_i = 0; ret_i < numRets; ret_i++)
                     {
                         type_stack[type_i++] = types[ret_i];
@@ -502,17 +575,18 @@ ValidateFuncBody(M3Function function, IM3Module module)
                 case c_waOp_call_indirect:
                 {
                     u32 type_idx, table_idx;
+                    Frame now = frames[frame_i - 1];
                     _( ReadLEB_u32(&type_idx, &io_bytes, end) );
                     _( ReadLEB_u32(&table_idx, &io_bytes, end) );
 
-                    _throwif(m3Err_wasmMalformed, table_idx != 0);  // only one table supported
-                    _throwif(m3Err_wasmMalformed, type_i == 0);
+                    _throwif("table idx > 0", table_idx != 0);  // only one table supported
+                    _throwif("call indirect empty stack", type_i <= now.base_i);
                     _throwif(
-                        m3Err_wasmMalformed,
+                        "call indirect idx wrong type",
                         (type_stack[--type_i] != c_m3Type_i32)
                     );
                     _throwif(
-                        m3Err_wasmMalformed,
+                        "call indirect type idx out of range",
                         (type_idx >= module->numFuncTypes)
                     );
                     IM3FuncType functype = module->funcTypes[type_idx];
@@ -521,14 +595,24 @@ ValidateFuncBody(M3Function function, IM3Module module)
                     u8 *types = functype->types;
                     u16 arg_i = numArgs + numRets;
 
+                    _throwif("weird stack", type_i < now.base_i);
                     while ((arg_i--) > numRets)
                     {
-                        _throwif(m3Err_wasmMalformed, type_i == 0);
                         _throwif(
-                            m3Err_wasmMalformed,
+                            "call indirect out of stack",
+                            type_i == now.base_i
+                        );
+                        _throwif(
+                            "call indirect wrong type",
                             (type_stack[--type_i] != types[arg_i])
                         );
                     }
+                    _throwif(
+                        "stack insane",
+                        (type_i >= d_m3MaxSaneTypeStackSize
+                                   - d_m3MaxSaneFunctionArgRetCount)
+                    );
+
                     for (u16 ret_i = 0; ret_i < numRets; ret_i++)
                     {
                         type_stack[type_i++] = types[ret_i];
@@ -538,20 +622,22 @@ ValidateFuncBody(M3Function function, IM3Module module)
                 }
                 case c_waOp_drop:
                 {
-                    _throwif(m3Err_wasmMalformed, (type_i--) == 0);
+                    Frame now = frames[frame_i - 1];
+                    _throwif("nothing to drop", (type_i--) <= now.base_i);
                     continue;
                 }
                 case c_waOp_select:
                 {
-                    _throwif(m3Err_wasmMalformed, type_i < 3);
+                    Frame now = frames[frame_i - 1];
+                    _throwif("select out of stack", type_i < 3 + now.base_i);
                     _throwif(
-                        m3Err_wasmMalformed,
+                        "select not i32",
                         (type_stack[--type_i] != c_m3Type_i32)
                     );
                     u8 t1 = type_stack[--type_i];
-                    u8 t2 = type_stack[--type_i];
+                    u8 t2 = type_stack[type_i - 1];
 
-                    _throwif(m3Err_wasmMalformed, (t1 != t2));
+                    _throwif("select type mismatch", (t1 != t2));
 
                     continue;
                 }
@@ -560,23 +646,33 @@ ValidateFuncBody(M3Function function, IM3Module module)
                     u32 local_idx;
                     _( ReadLEB_u32(&local_idx, &io_bytes, end) );
 
-                    _throwif(m3Err_wasmMalformed, local_idx >= total_locals);
-
+                    _throwif(
+                        "get local idx out of range",
+                        local_idx >= total_locals
+                    );
+                    _throwif(
+                        "stack insane",
+                        (type_i >= d_m3MaxSaneTypeStackSize)
+                    );
                     type_stack[type_i++] = local_types[local_idx];
 
                     continue;
                 }
                 case c_waOp_setLocal:
                 {
+                    Frame now = frames[frame_i - 1];
                     u32 local_idx;
                     _( ReadLEB_u32(&local_idx, &io_bytes, end) );
 
-                    _throwif(m3Err_wasmMalformed, local_idx >= total_locals);
+                    _throwif(
+                        "get local idx out of range",
+                        local_idx >= total_locals
+                    );
 
-                    _throwif(m3Err_wasmMalformed, type_i == 0);
+                    _throwif("set local empty stack", type_i <= now.base_i);
 
                     _throwif(
-                        m3Err_wasmMalformed,
+                        "set local wrong type",
                         (type_stack[--type_i] != local_types[local_idx])
                     );
 
@@ -584,15 +680,19 @@ ValidateFuncBody(M3Function function, IM3Module module)
                 }
                 case c_waOp_teeLocal:
                 {
+                    Frame now = frames[frame_i - 1];
                     u32 local_idx;
                     _( ReadLEB_u32(&local_idx, &io_bytes, end) );
 
-                    _throwif(m3Err_wasmMalformed, local_idx >= total_locals);
+                    _throwif(
+                        "tee local idx out of range",
+                        local_idx >= total_locals
+                    );
 
-                    _throwif(m3Err_wasmMalformed, type_i == 0);
+                    _throwif("tee empty ", type_i <= now.base_i);
 
                     _throwif(
-                        m3Err_wasmMalformed,
+                        "tee stack empty",
                         (type_stack[type_i-1] != local_types[local_idx])
                     );
 
@@ -604,33 +704,38 @@ ValidateFuncBody(M3Function function, IM3Module module)
                     _( ReadLEB_u32(&global_idx, &io_bytes, end) );
 
                     _throwif(
-                        m3Err_wasmMalformed,
+                        "global idx out of range",
                         (global_idx >= module->numGlobals)
                     );
 
                     M3Global global = module->globals[global_idx];
+                    _throwif(
+                        "insane stack",
+                        (type_i >= d_m3MaxSaneTypeStackSize)
+                    );
                     type_stack[type_i++] = global.type;
 
                     continue;
                 }
                 case c_waOp_setGlobal:
                 {
+                    Frame now = frames[frame_i - 1];
                     u32 global_idx;
                     _( ReadLEB_u32(&global_idx, &io_bytes, end) );
 
                     _throwif(
-                        m3Err_wasmMalformed,
+                        "global idx out of range",
                         (global_idx >= module->numGlobals)
                     );
 
                     M3Global global = module->globals[global_idx];
 
-                    _throwif(m3Err_wasmMalformed, !global.isMutable);
+                    _throwif("global not mutable", !global.isMutable);
 
-                    _throwif(m3Err_wasmMalformed, type_i == 0);
+                    _throwif("global.set empty stack", type_i <= now.base_i);
 
                     _throwif(
-                        m3Err_wasmMalformed,
+                        "global.set wrong type",
                         (type_stack[--type_i] != global.type)
                     );
 
@@ -638,40 +743,54 @@ ValidateFuncBody(M3Function function, IM3Module module)
                 }
 
                 // control: leave frame
+
+                #define LEAVE_FRAME                                             \
+                    do {                                                        \
+                        bool is_else;                                           \
+                        _( SkipPastEndElse(&is_else, &io_bytes, end) );         \
+                        if (is_else)                                            \
+                        {                                                       \
+                            Frame* now = &frames[frame_i - 1];                  \
+                            bool frame_is_if = (bk_if == now->kind);            \
+                            bool frame_true_branch = now->is_true_branch;       \
+                            _throwif(                                           \
+                                "unbalanced else",                              \
+                                !(frame_is_if && frame_true_branch)             \
+                            );                                                  \
+                            now->is_true_branch = 0;                            \
+                            type_i = now->base_i;                               \
+                            u16 numArgs = now->blocktype->numArgs;              \
+                            u16 numRets = now->blocktype->numRets;              \
+                            u16 numTot = numRets + numArgs;                     \
+                            u8 *types = now->blocktype->types;                  \
+                            for (u32 arg_i = numRets; arg_i < numTot; arg_i++)  \
+                            {                                                   \
+                                type_stack[type_i++] = types[arg_i];            \
+                            }                                                   \
+                        }                                                       \
+                        else                                                    \
+                        {                                                       \
+                            Frame popped = frames[--frame_i];                   \
+                            type_i = popped.base_i;                             \
+                            u32 numRets = popped.blocktype->numRets;            \
+                            u32 numArgs = popped.blocktype->numArgs;            \
+                            u8 *types = popped.blocktype->types;                \
+                            _throwif(                                           \
+                                "insane stack",                                 \
+                                (type_i >= d_m3MaxSaneTypeStackSize             \
+                                           - d_m3MaxSaneFunctionArgRetCount)    \
+                            );                                                  \
+                            for (u32 i = 0; i < numRets; i++)                   \
+                            {                                                   \
+                                type_stack[type_i++] = types[i];                \
+                            }                                                   \
+                        }                                                       \
+                    } while (0)
+
                 case c_waOp_unreachable:
                 {
-                    // go to the end of current block
-                    bool is_else;
-                    _( SkipPastEndElse(&is_else, &io_bytes, end) );
-
-                    if (is_else) // switch the frame
-                    {
-                        u32 now_i = frame_i - 1;
-                        bool frame_is_if = (bk_if == frames[now_i].kind);
-                        bool frame_true_branch = frames[now_i].is_true_branch;
-                        _throwif(
-                            m3Err_wasmMalformed,
-                            !(frame_is_if && frame_true_branch)
-                        );
-                        frames[now_i].is_true_branch = 0;
-                        type_i = frames[now_i].base_i;
-
-                        continue;
-                    }
-                    else
-                    {
-                        Frame popped = frames[--frame_i];
-                        type_i = popped.base_i;
-                        
-                        u32 numRets = popped.blocktype->numRets;
-                        u8 *types = popped.blocktype->types;
-                        for (u32 i = 0; i < numRets; i++)
-                        {
-                            type_stack[type_i++] = types[i];
-                        }
-
-                        continue;
-                    }
+                    LEAVE_FRAME;
+                    continue;
                 }
                 case c_waOp_else:
                 {
@@ -679,21 +798,22 @@ ValidateFuncBody(M3Function function, IM3Module module)
                     bool frame_is_if = (bk_if == now->kind);
                     bool frame_true_branch = now->is_true_branch;
                     _throwif(
-                        m3Err_wasmMalformed,
+                        "unbalanced else",
                         !(frame_is_if && frame_true_branch)
                     );
-                    _throwif(m3Err_wasmMalformed, (type_i < now->base_i));
+                    _throwif("weird stack", (type_i < now->base_i));
                     u16 numRets = now->blocktype->numRets;
                     u8* types = now->blocktype->types;
                     u16 ret_i = numRets;
                     while (ret_i--)
                     {
+                        _throwif("else empty stack", type_i == now->base_i);
                         _throwif(
-                            m3Err_wasmMalformed,
+                            "else wrong type",
                             types[ret_i] != type_stack[--type_i]
                         );
                     }
-                    _throwif(m3Err_wasmMalformed, (type_i != now->base_i));
+                    _throwif("else wrong count", (type_i != now->base_i));
                     now->is_true_branch = 0;
 
                     continue;
@@ -701,175 +821,55 @@ ValidateFuncBody(M3Function function, IM3Module module)
                 case c_waOp_end:
                 {
                     Frame popped = frames[--frame_i];
-                    _throwif(m3Err_wasmMalformed, (type_i < popped.base_i));
+                    _throwif("weird stack", (type_i < popped.base_i));
                     u16 numRets = popped.blocktype->numRets;
                     u8* types = popped.blocktype->types;
                     u16 ret_i = numRets;
+                    u32 type_i_temp = type_i;
                     while (ret_i--)
                     {
                         _throwif(
-                            m3Err_wasmMalformed,
-                            types[ret_i] != type_stack[--type_i]
+                            "end out of stack",
+                            type_i_temp == popped.base_i
+                        );
+                        _throwif(
+                            "end wrong type",
+                            types[ret_i] != type_stack[--type_i_temp]
                         );
                     }
-                    _throwif(m3Err_wasmMalformed, (type_i != popped.base_i));
+                    _throwif(
+                        "end wrong count",
+                        (type_i_temp != popped.base_i)
+                    );
 
                     continue;
                 }
                 case c_waOp_branch:
                 {
-                    u32 depth;
-                    _( ReadLEB_u32(&depth, &io_bytes, end) );
+                    READ_DEPTH_TEST;
 
-                    _throwif(m3Err_wasmMalformed, (depth >= frame_i));
+                    LEAVE_FRAME;
 
-                    Frame frame = frames[frame_i-depth];
-
-                    if (frame.kind == bk_loop)
-                    {
-                        IM3FuncType blocktype = frame.blocktype;
-                        u16 numArgs = blocktype->numArgs;
-                        u16 numRets = blocktype->numRets;
-                        u16 arg_i = numArgs + numRets;
-                        u32 type_i_temp = type_i;
-                        u8 *types = blocktype->types;
-
-                        while ((arg_i--) > numRets)
-                        {
-                            _throwif(m3Err_wasmMalformed, type_i_temp == 0);
-                            _throwif(
-                                m3Err_wasmMalformed,
-                                type_stack[--type_i_temp] != types[arg_i]
-                            );
-                        }
-                    }
-                    else
-                    {
-                        IM3FuncType blocktype = frame.blocktype;
-                        u16 ret_i = blocktype->numRets;
-                        u32 type_i_temp = type_i;
-                        u8 *types = blocktype->types;
-
-                        while ((ret_i--) > 0)
-                        {
-                            _throwif(m3Err_wasmMalformed, type_i_temp == 0);
-                            _throwif(
-                                m3Err_wasmMalformed,
-                                type_stack[--type_i_temp] != types[ret_i]
-                            );
-                        }
-                    }
-
-                    // go to the end of the current block
-                    bool is_else;
-                    _( SkipPastEndElse(&is_else, &io_bytes, end) );
-
-                    if (is_else) // switch the frame
-                    {
-                        u32 now_i = frame_i - 1;
-                        bool frame_is_if = (bk_if == frames[now_i].kind);
-                        bool frame_true_branch = frames[now_i].is_true_branch;
-                        _throwif(
-                            m3Err_wasmMalformed,
-                            !(frame_is_if && frame_true_branch)
-                        );
-                        frames[now_i].is_true_branch = 0;
-                        type_i = frames[now_i].base_i;
-                    }
-                    else
-                    {
-                        Frame popped = frames[--frame_i];
-                        type_i = popped.base_i;
-                        
-                        u32 numRets = popped.blocktype->numRets;
-                        u8 *types = popped.blocktype->types;
-                        for (u32 i = 0; i < numRets; i++)
-                        {
-                            type_stack[type_i++] = types[i];
-                        }
-                    }
                     continue;
                 }
                 case c_waOp_branchTable:
                 {
+                    _throwif(
+                        "branch table no i32 idx",
+                        ( (type_i <= frames[frame_i - 1].base_i)
+                          || (c_m3Type_i32 != type_stack[--type_i]) )
+                    );
+
                     u32 n_depths;
                     _( ReadLEB_u32(&(n_depths), &io_bytes, end) );
                     n_depths++;
 
                     for (u32 i = 0; i < n_depths; i++)
                     {
-                        u32 depth;
-                        _( ReadLEB_u32(&depth, &io_bytes, end) );
-                        _throwif(m3Err_wasmMalformed, (depth >= frame_i));
-
-                        Frame frame = frames[frame_i-depth];
-
-                        if (frame.kind == bk_loop)
-                        {
-                            IM3FuncType blocktype = frame.blocktype;
-                            u16 numArgs = blocktype->numArgs;
-                            u16 numRets = blocktype->numRets;
-                            u16 arg_i = numArgs + numRets;
-                            u32 type_i_temp = type_i;
-                            u8 *types = blocktype->types;
-
-                            while ((arg_i--) > numRets)
-                            {
-                                _throwif(m3Err_wasmMalformed, type_i_temp == 0);
-                                _throwif(
-                                    m3Err_wasmMalformed,
-                                    type_stack[--type_i_temp] != types[arg_i]
-                                );
-                            }
-                        }
-                        else
-                        {
-                            IM3FuncType blocktype = frame.blocktype;
-                            u16 ret_i = blocktype->numRets;
-                            u32 type_i_temp = type_i;
-                            u8 *types = blocktype->types;
-
-                            while ((ret_i--) > 0)
-                            {
-                                _throwif(m3Err_wasmMalformed, type_i_temp == 0);
-                                _throwif(
-                                    m3Err_wasmMalformed,
-                                    type_stack[--type_i_temp] != types[ret_i]
-                                );
-                            }
-                        }
+                        READ_DEPTH_TEST;
                     }
 
-                    // go to the end of the current block
-                    bool is_else;
-                    _( SkipPastEndElse(&is_else, &io_bytes, end) );
-
-                    if (is_else) // switch the frame
-                    {
-                        u32 now_i = frame_i - 1;
-                        bool frame_is_if = (bk_if == frames[now_i].kind);
-                        bool frame_true_branch = frames[now_i].is_true_branch;
-                        _throwif(
-                            m3Err_wasmMalformed,
-                            !(frame_is_if && frame_true_branch)
-                        );
-                        frames[now_i].is_true_branch = 0;
-                        type_i = frames[now_i].base_i;
-
-                    }
-                    else
-                    {
-                        Frame popped = frames[--frame_i];
-                        type_i = popped.base_i;
-                        
-                        u32 numRets = popped.blocktype->numRets;
-                        u8 *types = popped.blocktype->types;
-                        for (u32 i = 0; i < numRets; i++)
-                        {
-                            type_stack[type_i++] = types[i];
-                        }
-
-                    }
+                    LEAVE_FRAME;
                     continue;
                 }
                 case c_waOp_return:
@@ -879,113 +879,72 @@ ValidateFuncBody(M3Function function, IM3Module module)
                     u16 ret_i = blocktype->numRets;
                     u32 type_i_temp = type_i;
                     u8 *types = blocktype->types;
+                    Frame now = frames[frame_i - 1];
+                    _throwif("weird stack", type_i_temp < now.base_i);
 
                     while ((ret_i--) > 0)
                     {
-                        _throwif(m3Err_wasmMalformed, type_i_temp == 0);
                         _throwif(
-                            m3Err_wasmMalformed,
+                            "return out of stack",
+                            type_i_temp == now.base_i
+                        );
+                        _throwif(
+                            "return wrong type",
                             type_stack[--type_i_temp] != types[ret_i]
                         );
                     }
 
-                    // go to the end of the current block
-                    bool is_else;
-                    _( SkipPastEndElse(&is_else, &io_bytes, end) );
-
-                    if (is_else) // switch the frame
-                    {
-                        u32 now_i = frame_i - 1;
-                        bool frame_is_if = (bk_if == frames[now_i].kind);
-                        bool frame_true_branch = frames[now_i].is_true_branch;
-                        _throwif(
-                            m3Err_wasmMalformed,
-                            !(frame_is_if && frame_true_branch)
-                        );
-                        frames[now_i].is_true_branch = 0;
-                        type_i = frames[now_i].base_i;
-                    }
-                    else
-                    {
-                        Frame popped = frames[--frame_i];
-                        type_i = popped.base_i;
-                        
-                        u32 numRets = popped.blocktype->numRets;
-                        u8 *types = popped.blocktype->types;
-                        for (u32 i = 0; i < numRets; i++)
-                        {
-                            type_stack[type_i++] = types[i];
-                        }
-                    }
+                    LEAVE_FRAME;
                     continue;
                 }
-                
 
                 // control: enter frame
+                #define ENTER_FRAME(KIND, IS_TRUE_BRANCH)                       \
+                    do                                                          \
+                    {                                                           \
+                        IM3FuncType blocktype;                                  \
+                        _( ParseBlockType(&blocktype, &io_bytes, end, module) );\
+                        u16 numArgs = blocktype->numArgs;                       \
+                        u16 numRets = blocktype->numRets;                       \
+                        u8 *types = blocktype->types;                           \
+                        u16 arg_i = numArgs + numRets;                          \
+                        Frame now = frames[frame_i - 1];                        \
+                        _throwif("weird stack", type_i < now.base_i);           \
+                        while ((arg_i--) > numRets)                             \
+                        {                                                       \
+                            _throwif(                                           \
+                                "enter frame out of stack",                     \
+                                type_i == now.base_i                            \
+                            );                                                  \
+                            _throwif(                                           \
+                                "enter frame wrong type",                       \
+                                type_stack[--type_i] != types[arg_i]            \
+                            );                                                  \
+                        }                                                       \
+                        Frame new = {KIND, IS_TRUE_BRANCH, type_i, blocktype};  \
+                        frames[frame_i++] = new;                                \
+                        type_i += numArgs;                                      \
+                    } while (0)
+
                 case c_waOp_block:
                 {
-                    IM3FuncType blocktype;
-                    _( ParseBlockType(&blocktype, &io_bytes, end, module) );
-
-                    u16 numArgs = blocktype->numArgs;
-                    u16 numRets = blocktype->numRets;
-                    u8 *types = blocktype->types;
-                    u16 arg_i = numArgs + numRets;
-                    while ((arg_i--) > numRets) 
-                    {
-                        _throwif(m3Err_wasmMalformed, type_i == 0);
-                        _throwif(
-                            m3Err_wasmMalformed,
-                            type_stack[--type_i] != types[arg_i]
-                        );
-                    }
-
-                    Frame new = {bk_block, 0, type_i, blocktype};
-                    frames[frame_i++] = new;
+                    ENTER_FRAME(bk_block, 0);
                     continue;
                 }
                 case c_waOp_loop:
                 {
-                    IM3FuncType blocktype;
-                    _( ParseBlockType(&blocktype, &io_bytes, end, module) );
-
-                    u16 numArgs = blocktype->numArgs;
-                    u16 numRets = blocktype->numRets;
-                    u8 *types = blocktype->types;
-                    u16 arg_i = numArgs + numRets;
-                    while ((arg_i--) > numRets) 
-                    {
-                        _throwif(m3Err_wasmMalformed, type_i == 0);
-                        _throwif(
-                            m3Err_wasmMalformed,
-                            type_stack[--type_i] != types[arg_i]
-                        );
-                    }
-
-                    Frame new = {bk_loop, 0, type_i, blocktype};
-                    frames[frame_i++] = new;
+                    ENTER_FRAME(bk_loop, 0);
                     continue;
                 }
                 case c_waOp_if:
                 {
-                    IM3FuncType blocktype;
-                    _( ParseBlockType(&blocktype, &io_bytes, end, module) );
+                    _throwif(
+                        "if no flag",
+                        ( (type_i <= frames[frame_i-1].base_i)
+                          || (type_stack[--type_i] != c_m3Type_i32) )
+                    );
 
-                    u16 numArgs = blocktype->numArgs;
-                    u16 numRets = blocktype->numRets;
-                    u8 *types = blocktype->types;
-                    u16 arg_i = numArgs + numRets;
-                    while ((arg_i--) > numRets) 
-                    {
-                        _throwif(m3Err_wasmMalformed, type_i == 0);
-                        _throwif(
-                            m3Err_wasmMalformed,
-                            type_stack[--type_i] != types[arg_i]
-                        );
-                    }
-
-                    Frame new = {bk_if, 1, type_i, blocktype};
-                    frames[frame_i++] = new;
+                    ENTER_FRAME(bk_if, 1);
                     continue;
                 }
 
@@ -993,11 +952,12 @@ ValidateFuncBody(M3Function function, IM3Module module)
                 case c_waOp_return_call:
                 case c_waOp_return_call_indirect:
                 {
-                    _throw(m3Err_wasmMalformed);
+                    _throw("not implemented");
                 }
+
                 default:
                 {
-                    _throw(m3Err_wasmMalformed);
+                    _throw("not recognized");
                 }
             }
         }
@@ -1015,7 +975,7 @@ ValidateCode(IM3Module module)
     for (u32 i = module->numFuncImports; i < module->numFunctions; i++)
     {
         M3Function function = module->functions[i];
-        M3FuncType type = *function.funcType;
+        _throwif("imported function", !function.wasm);
         _( ValidateFuncBody(function, module) );
     }
 
@@ -1054,21 +1014,23 @@ M3Result
 m3_ValidateModule(IM3Module module)
 {
     M3Result result = m3Err_none;
-    _try
-    {
-        //  imports and exports are validated implicitly?
-        //        
-        _( ValidateFunctions(module) );
-        _( ValidateTables(module) );
-        _( ValidateMemory(module) );
-        _( ValidateGlobals(module) );
-        _( ValidateStart(module) );
-        _( ValidateElem(module) );
-        _( ValidateDatacnt(module) );
-        _( ValidateCode(module) );
-        _( ValidateData(module) );
-    }
-    _catch: {}
-    return result;
+
+    _( ValidateTables(module) );
+
+    _( ValidateMemory(module) );
+
+    _( ValidateGlobals(module) );
+
+    _( ValidateStart(module) );
+
+    _( ValidateElem(module) );
+
+    _( ValidateDatacnt(module) );
+
+    _( ValidateCode(module) );
+
+    _( ValidateData(module) );
+    
+    _catch: return result;
 }
 

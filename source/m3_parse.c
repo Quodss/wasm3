@@ -689,6 +689,7 @@ _try {
     _throwifnull (module);
     module->name = ".unnamed";                                                      m3log (parse, "load module: %d bytes", i_numBytes);
     module->startFunction = -1;
+    module->dataCnt = -1;
     //module->hasWasmCodeCopy = false;
     module->environment = i_environment;
 
