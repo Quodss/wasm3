@@ -2190,37 +2190,37 @@ const M3OpInfo M3_OP_Array [] =
 
     M3OP_RESERVED,  M3OP_RESERVED, M3OP_RESERVED,                                                                             // 0x25 - 0x27
 
-    M3OP( "i32.load",           0,  i_32,   d_unaryOpList (i32, Load_i32),      Compile_Load_Store,   1, 1,  2, "ii" ),  // 0x28
-    M3OP( "i64.load",           0,  i_64,   d_unaryOpList (i64, Load_i64),      Compile_Load_Store,   1, 1,  2, "iI" ),  // 0x29
-    M3OP_F( "f32.load",         0,  f_32,   d_unaryOpList (f32, Load_f32),      Compile_Load_Store,   1, 1,  2, "if" ),  // 0x2a
-    M3OP_F( "f64.load",         0,  f_64,   d_unaryOpList (f64, Load_f64),      Compile_Load_Store,   1, 1,  2, "iF" ),  // 0x2b
+    M3OP( "i32.load",           0,  i_32,   d_unaryOpList (i32, Load_i32),      Compile_Load_Store,   1, 1, -2, "ii" ),  // 0x28
+    M3OP( "i64.load",           0,  i_64,   d_unaryOpList (i64, Load_i64),      Compile_Load_Store,   1, 1, -2, "iI" ),  // 0x29
+    M3OP_F( "f32.load",         0,  f_32,   d_unaryOpList (f32, Load_f32),      Compile_Load_Store,   1, 1, -2, "if" ),  // 0x2a
+    M3OP_F( "f64.load",         0,  f_64,   d_unaryOpList (f64, Load_f64),      Compile_Load_Store,   1, 1, -2, "iF" ),  // 0x2b
    
-    M3OP( "i32.load8_s",        0,  i_32,   d_unaryOpList (i32, Load_i8),       Compile_Load_Store,   1, 1,  2, "ii" ),  // 0x2c
-    M3OP( "i32.load8_u",        0,  i_32,   d_unaryOpList (i32, Load_u8),       Compile_Load_Store,   1, 1,  2, "ii" ),  // 0x2d
-    M3OP( "i32.load16_s",       0,  i_32,   d_unaryOpList (i32, Load_i16),      Compile_Load_Store,   1, 1,  2, "ii" ),  // 0x2e
-    M3OP( "i32.load16_u",       0,  i_32,   d_unaryOpList (i32, Load_u16),      Compile_Load_Store,   1, 1,  2, "ii" ),  // 0x2f
+    M3OP( "i32.load8_s",        0,  i_32,   d_unaryOpList (i32, Load_i8),       Compile_Load_Store,   1, 1, -2, "ii" ),  // 0x2c
+    M3OP( "i32.load8_u",        0,  i_32,   d_unaryOpList (i32, Load_u8),       Compile_Load_Store,   1, 1, -2, "ii" ),  // 0x2d
+    M3OP( "i32.load16_s",       0,  i_32,   d_unaryOpList (i32, Load_i16),      Compile_Load_Store,   1, 1, -2, "ii" ),  // 0x2e
+    M3OP( "i32.load16_u",       0,  i_32,   d_unaryOpList (i32, Load_u16),      Compile_Load_Store,   1, 1, -2, "ii" ),  // 0x2f
    
-    M3OP( "i64.load8_s",        0,  i_64,   d_unaryOpList (i64, Load_i8),       Compile_Load_Store,   1, 1,  2, "iI" ),  // 0x30
-    M3OP( "i64.load8_u",        0,  i_64,   d_unaryOpList (i64, Load_u8),       Compile_Load_Store,   1, 1,  2, "iI" ),  // 0x31
-    M3OP( "i64.load16_s",       0,  i_64,   d_unaryOpList (i64, Load_i16),      Compile_Load_Store,   1, 1,  2, "iI" ),  // 0x32
-    M3OP( "i64.load16_u",       0,  i_64,   d_unaryOpList (i64, Load_u16),      Compile_Load_Store,   1, 1,  2, "iI" ),  // 0x33
-    M3OP( "i64.load32_s",       0,  i_64,   d_unaryOpList (i64, Load_i32),      Compile_Load_Store,   1, 1,  2, "iI" ),  // 0x34
-    M3OP( "i64.load32_u",       0,  i_64,   d_unaryOpList (i64, Load_u32),      Compile_Load_Store,   1, 1,  2, "iI" ),  // 0x35
+    M3OP( "i64.load8_s",        0,  i_64,   d_unaryOpList (i64, Load_i8),       Compile_Load_Store,   1, 1, -2, "iI" ),  // 0x30
+    M3OP( "i64.load8_u",        0,  i_64,   d_unaryOpList (i64, Load_u8),       Compile_Load_Store,   1, 1, -2, "iI" ),  // 0x31
+    M3OP( "i64.load16_s",       0,  i_64,   d_unaryOpList (i64, Load_i16),      Compile_Load_Store,   1, 1, -2, "iI" ),  // 0x32
+    M3OP( "i64.load16_u",       0,  i_64,   d_unaryOpList (i64, Load_u16),      Compile_Load_Store,   1, 1, -2, "iI" ),  // 0x33
+    M3OP( "i64.load32_s",       0,  i_64,   d_unaryOpList (i64, Load_i32),      Compile_Load_Store,   1, 1, -2, "iI" ),  // 0x34
+    M3OP( "i64.load32_u",       0,  i_64,   d_unaryOpList (i64, Load_u32),      Compile_Load_Store,   1, 1, -2, "iI" ),  // 0x35
    
-    M3OP( "i32.store",          -2, none,   d_binOpList (i32, Store_i32),       Compile_Load_Store,   2, 0,  2, "ii" ),  // 0x36
-    M3OP( "i64.store",          -2, none,   d_binOpList (i64, Store_i64),       Compile_Load_Store,   2, 0,  2, "iI" ),  // 0x37
-    M3OP_F( "f32.store",        -2, none,   d_storeFpOpList (f32, Store_f32),   Compile_Load_Store,   2, 0,  2, "if" ),  // 0x38
-    M3OP_F( "f64.store",        -2, none,   d_storeFpOpList (f64, Store_f64),   Compile_Load_Store,   2, 0,  2, "iF" ),  // 0x39
+    M3OP( "i32.store",          -2, none,   d_binOpList (i32, Store_i32),       Compile_Load_Store,   2, 0, -2, "ii" ),  // 0x36
+    M3OP( "i64.store",          -2, none,   d_binOpList (i64, Store_i64),       Compile_Load_Store,   2, 0, -2, "iI" ),  // 0x37
+    M3OP_F( "f32.store",        -2, none,   d_storeFpOpList (f32, Store_f32),   Compile_Load_Store,   2, 0, -2, "if" ),  // 0x38
+    M3OP_F( "f64.store",        -2, none,   d_storeFpOpList (f64, Store_f64),   Compile_Load_Store,   2, 0, -2, "iF" ),  // 0x39
    
-    M3OP( "i32.store8",         -2, none,   d_binOpList (i32, Store_u8),        Compile_Load_Store,   2, 0,  2, "ii" ),  // 0x3a
-    M3OP( "i32.store16",        -2, none,   d_binOpList (i32, Store_i16),       Compile_Load_Store,   2, 0,  2, "ii" ),  // 0x3b
+    M3OP( "i32.store8",         -2, none,   d_binOpList (i32, Store_u8),        Compile_Load_Store,   2, 0, -2, "ii" ),  // 0x3a
+    M3OP( "i32.store16",        -2, none,   d_binOpList (i32, Store_i16),       Compile_Load_Store,   2, 0, -2, "ii" ),  // 0x3b
    
-    M3OP( "i64.store8",         -2, none,   d_binOpList (i64, Store_u8),        Compile_Load_Store,   2, 0,  2, "iI" ),  // 0x3c
-    M3OP( "i64.store16",        -2, none,   d_binOpList (i64, Store_i16),       Compile_Load_Store,   2, 0,  2, "iI" ),  // 0x3d
-    M3OP( "i64.store32",        -2, none,   d_binOpList (i64, Store_i32),       Compile_Load_Store,   2, 0,  2, "iI" ),  // 0x3e
+    M3OP( "i64.store8",         -2, none,   d_binOpList (i64, Store_u8),        Compile_Load_Store,   2, 0, -2, "iI" ),  // 0x3c
+    M3OP( "i64.store16",        -2, none,   d_binOpList (i64, Store_i16),       Compile_Load_Store,   2, 0, -2, "iI" ),  // 0x3d
+    M3OP( "i64.store32",        -2, none,   d_binOpList (i64, Store_i32),       Compile_Load_Store,   2, 0, -2, "iI" ),  // 0x3e
 
-    M3OP( "memory.size",        1,  i_32,   d_logOp (MemSize),                  Compile_Memory_Size,  0, 1,  1, "i" ),   // 0x3f
-    M3OP( "memory.grow",        1,  i_32,   d_logOp (MemGrow),                  Compile_Memory_Grow,  1, 1,  1, "ii" ),  // 0x40
+    M3OP( "memory.size",        1,  i_32,   d_logOp (MemSize),                  Compile_Memory_Size,  0, 1, -1, "i" ),   // 0x3f
+    M3OP( "memory.grow",        1,  i_32,   d_logOp (MemGrow),                  Compile_Memory_Grow,  1, 1, -1, "ii" ),  // 0x40
 
     M3OP( "i32.const",          1,  i_32,   d_logOp (Const32),                  Compile_Const_i32,    0, 1, -1, "i" ),   // 0x41
     M3OP( "i64.const",          1,  i_64,   d_logOp (Const64),                  Compile_Const_i64,    0, 1, -1, "I" ),   // 0x42
@@ -2436,8 +2436,8 @@ const M3OpInfo M3_OP_ArrayFC [] =
 
     M3OP_RESERVED, M3OP_RESERVED,                                                                                                 // 0x08-0x09
 
-    M3OP( "memory.copy",            0,  none,   d_emptyOpList,                    Compile_Memory_CopyFill, 3, 0, 2, "iii" ), // 0x0a
-    M3OP( "memory.fill",            0,  none,   d_emptyOpList,                    Compile_Memory_CopyFill, 3, 0, 1, "iii" ), // 0x0b
+    M3OP( "memory.copy",            0,  none,   d_emptyOpList,                    Compile_Memory_CopyFill, 3, 0, -1, "iii" ), // 0x0a
+    M3OP( "memory.fill",            0,  none,   d_emptyOpList,                    Compile_Memory_CopyFill, 3, 0, -1, "iii" ), // 0x0b
 
 
 # ifdef DEBUG

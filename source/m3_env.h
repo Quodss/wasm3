@@ -19,6 +19,7 @@ d_m3BeginExternC
 
 typedef struct M3MemoryInfo
 {
+    bool    hasMemory;
     u32     initPages;
     i32     imaxPages;  // -1 means no limit
 }

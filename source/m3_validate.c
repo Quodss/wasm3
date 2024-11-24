@@ -195,11 +195,15 @@ static M3Result
 SkipImmediateArgs(m3opcode_t op,
                   i8 numArgsImmediate,
                   bytes_t *io_bytes,
-                  cbytes_t end
+                  cbytes_t end,
+                  IM3Module module
 );
 
 static M3Result
-SkipPastEndElse(bool* is_else, bytes_t *io_bytes, cbytes_t end)
+SkipPastEndElse(bool* is_else,
+                bytes_t *io_bytes,
+                cbytes_t end,
+                IM3Module module)
 {
     M3Result result = m3Err_none;
     while (1)
@@ -235,7 +239,7 @@ SkipPastEndElse(bool* is_else, bytes_t *io_bytes, cbytes_t end)
         i8 imm_args = info->numArgsImmediate;
         if (imm_args != 0)
         {
-            _( SkipImmediateArgs(op, imm_args, io_bytes, end) );
+            _( SkipImmediateArgs(op, imm_args, io_bytes, end, module) );
         }
     }
 
@@ -246,7 +250,8 @@ static M3Result
 SkipImmediateArgs(m3opcode_t op,
                   i8 numArgsImmediate,
                   bytes_t *io_bytes,
-                  cbytes_t end)
+                  cbytes_t end,
+                  IM3Module module)
 {
     M3Result result = m3Err_none;
 
@@ -257,6 +262,64 @@ SkipImmediateArgs(m3opcode_t op,
         {
             _( ReadLEB_u32(&sink, io_bytes, end) );
         }
+    }
+    else if (numArgsImmediate == -2)
+    {
+        //  memarg
+        u32 align, offset;
+        _( ReadLEB_u32(&align, io_bytes, end) );
+        _( ReadLEB_u32(&offset, io_bytes, end) );
+
+        u32 byte_width;
+        switch (op)
+        {
+            case c_waOp_i32_load:
+            case c_waOp_f32_load:
+            case c_waOp_i32_store:
+            case c_waOp_f32_store:
+            case c_waOp_i64_load32_s:
+            case c_waOp_i64_load32_u:
+            case c_waOp_i64_store32:
+            {
+                byte_width = 4;
+                break;
+            }
+            case c_waOp_i64_load:
+            case c_waOp_f64_load:
+            case c_waOp_i64_store:
+            case c_waOp_f64_store:
+            {
+                byte_width = 8;
+                break;
+            }
+            case c_waOp_i32_load8_s:
+            case c_waOp_i32_load8_u:
+            case c_waOp_i64_load8_s:
+            case c_waOp_i64_load8_u:
+            case c_waOp_i32_store8:
+            case c_waOp_i64_store8:
+            {
+                byte_width = 1;
+                break;
+            }
+            case c_waOp_i32_load16_s:
+            case c_waOp_i32_load16_u:
+            case c_waOp_i64_load16_s:
+            case c_waOp_i64_load16_u:
+            case c_waOp_i32_store16:
+            case c_waOp_i64_store16:
+            {
+                byte_width = 2;
+                break;
+            }
+            default:
+            {
+                _throw("can't calculate width");
+            }
+        }
+
+        _throwif("misaligned", ((1 << align) > byte_width));
+
     }
     else
     {
@@ -292,7 +355,7 @@ SkipImmediateArgs(m3opcode_t op,
                 i64 sink;
                 _( ReadLebSigned (& sink, 33, io_bytes, end) );
                 bool is_else;
-                _( SkipPastEndElse(&is_else, io_bytes, end) );
+                _( SkipPastEndElse(&is_else, io_bytes, end, module) );
                 _throwif("unbalanced else", is_else);
                 break;
             }
@@ -301,10 +364,10 @@ SkipImmediateArgs(m3opcode_t op,
                 i64 sink;
                 _( ReadLebSigned (& sink, 33, io_bytes, end) );
                 bool is_else;
-                _( SkipPastEndElse(&is_else, io_bytes, end) );
+                _( SkipPastEndElse(&is_else, io_bytes, end, module) );
                 if (is_else)
                 {
-                    _( SkipPastEndElse(&is_else, io_bytes, end) );
+                    _( SkipPastEndElse(&is_else, io_bytes, end, module) );
                     _throwif("unbalanced else", is_else);
                 }
                 break;
@@ -320,6 +383,26 @@ SkipImmediateArgs(m3opcode_t op,
                     u32 sink;
                     _( ReadLEB_u32(&sink, io_bytes, end) );
                 }
+                break;
+            }
+            case c_waOp_memorySize:
+            case c_waOp_memoryGrow:
+            case c_waOp_memoryFill:
+            {
+                u32 mem_idx;
+                _( ReadLEB_u32(&(mem_idx), io_bytes, end) );
+                _throwif("memidx > 0", mem_idx);
+                _throwif("no memory", !module->memoryInfo.hasMemory);
+                break;
+            }
+            case c_waOp_memoryCopy:
+            {
+                u32 mem_idx1, mem_idx2;
+                _( ReadLEB_u32(&(mem_idx1), io_bytes, end) );
+                _( ReadLEB_u32(&(mem_idx2), io_bytes, end) );
+                _throwif("memidx > 0", mem_idx1);
+                _throwif("memidx > 0", mem_idx2);
+                _throwif("no memory", !module->memoryInfo.hasMemory);
                 break;
             }
             // else, end are skipped as part of an expression
@@ -455,7 +538,7 @@ ValidateFuncBody(M3Function function, IM3Module module)
             i8 imm_args = info->numArgsImmediate;
             if (imm_args != 0)
             {
-                _(SkipImmediateArgs(op, imm_args, &io_bytes, end));
+                _(SkipImmediateArgs(op, imm_args, &io_bytes, end, module));
             }
         }
         else
@@ -747,7 +830,7 @@ ValidateFuncBody(M3Function function, IM3Module module)
                 #define LEAVE_FRAME                                             \
                     do {                                                        \
                         bool is_else;                                           \
-                        _( SkipPastEndElse(&is_else, &io_bytes, end) );         \
+                        _( SkipPastEndElse(&is_else, &io_bytes, end, module) ); \
                         if (is_else)                                            \
                         {                                                       \
                             Frame* now = &frames[frame_i - 1];                  \

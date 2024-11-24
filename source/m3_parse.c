@@ -222,32 +222,37 @@ _               (Module_AddFunction (io_module, typeIndex, & import))
 
             case d_externalKind_table:
 //                  result = ParseType_Table (& i_bytes, i_end);
-                break;
+                // break;
+            {
+                _throw("table import not implemented");
+            }
 
             case d_externalKind_memory:
             {
-_               (ParseType_Memory (& io_module->memoryInfo, & i_bytes, i_end));
-                io_module->memoryImported = true;
+// _               (ParseType_Memory (& io_module->memoryInfo, & i_bytes, i_end));
+//                 io_module->memoryImported = true;
+                _throw("memory import not implemented");
             }
             break;
 
             case d_externalKind_global:
             {
-                i8 waType;
-                u8 type, isMutable;
+//                 i8 waType;
+//                 u8 type, isMutable;
 
-_               (ReadLEB_i7 (& waType, & i_bytes, i_end));
-_               (NormalizeType (& type, waType));
-_               (Read_u8 (& isMutable, & i_bytes, i_end));                     m3log (parse, "     global: %s mutable=%d", c_waTypes [type], (u32) isMutable);
-                if (isMutable > 1)
-                {
-                    _throw(m3Err_WeirdFlag);
-                }
-                IM3Global global;
-_               (Module_AddGlobal (io_module, & global, type, isMutable, true /* isImport */));
-                global->import = import;
-                import = clearImport;
-                io_module->numGlobImports++;
+// _               (ReadLEB_i7 (& waType, & i_bytes, i_end));
+// _               (NormalizeType (& type, waType));
+// _               (Read_u8 (& isMutable, & i_bytes, i_end));                     m3log (parse, "     global: %s mutable=%d", c_waTypes [type], (u32) isMutable);
+//                 if (isMutable > 1)
+//                 {
+//                     _throw(m3Err_WeirdFlag);
+//                 }
+//                 IM3Global global;
+// _               (Module_AddGlobal (io_module, & global, type, isMutable, true /* isImport */));
+//                 global->import = import;
+//                 import = clearImport;
+//                 io_module->numGlobImports++;
+                _throw("global import not implemented");
             }
             break;
 
@@ -528,6 +533,8 @@ _   (ReadLEB_u32 (& numMemories, & i_bytes, i_end));                            
     _throwif (m3Err_tooManyMemorySections, numMemories != 1);
 
     ParseType_Memory (& io_module->memoryInfo, & i_bytes, i_end);
+
+    io_module->memoryInfo.hasMemory = 1;
 
     _catch: return result;
 }
