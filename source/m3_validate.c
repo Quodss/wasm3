@@ -405,10 +405,22 @@ SkipImmediateArgs(m3opcode_t op,
                 _throwif("no memory", !module->memoryInfo.hasMemory);
                 break;
             }
+            case c_waOp_call_indirect:
+            {
+                u32 type_idx, table_idx;
+                _( ReadLEB_u32(&(type_idx), io_bytes, end) );
+                _( ReadLEB_u32(&(table_idx), io_bytes, end) );
+                _throwif("table idx > 0", table_idx);
+                _throwif(
+                    "type idx out of range",
+                    type_idx >= module->numFuncTypes
+                );
+                break;
+            }
             // else, end are skipped as part of an expression
             default:
             {
-                _throw("else or end in skip immediate?");
+                _throw("unbalnced else/end");
             }
         }
     }
@@ -846,6 +858,11 @@ ValidateFuncBody(M3Function function, IM3Module module)
                             u16 numRets = now->blocktype->numRets;              \
                             u16 numTot = numRets + numArgs;                     \
                             u8 *types = now->blocktype->types;                  \
+                            _throwif(                                           \
+                                "insane stack",                                 \
+                                (type_i >= d_m3MaxSaneTypeStackSize             \
+                                           - d_m3MaxSaneFunctionArgRetCount)    \
+                            );                                                  \
                             for (u32 arg_i = numRets; arg_i < numTot; arg_i++)  \
                             {                                                   \
                                 type_stack[type_i++] = types[arg_i];            \
@@ -900,6 +917,11 @@ ValidateFuncBody(M3Function function, IM3Module module)
                     }
                     _throwif("else wrong count", (type_i != now->base_i));
                     now->is_true_branch = 0;
+                    _throwif(
+                        "insane stack",
+                        (type_i >= d_m3MaxSaneTypeStackSize
+                                    - d_m3MaxSaneFunctionArgRetCount)
+                    );
                     for (u32 arg_i = numRets; arg_i < numTot; arg_i++)
                     {                                                 
                         type_stack[type_i++] = types[arg_i];          

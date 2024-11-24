@@ -2170,7 +2170,7 @@ const M3OpInfo M3_OP_Array [] =
     M3OP( "br_table",           -1, none,   d_logOp (BranchTable),              Compile_BranchTable,  0, 0, -1, NULL ),       // 0x0e
     M3OP( "return",              0, any,    d_logOp (Return),                   Compile_Return,       0, 0,  0, NULL ),       // 0x0f
     M3OP( "call",                0, any,    d_logOp (Call),                     Compile_Call,         0, 0,  1, NULL ),       // 0x10
-    M3OP( "call_indirect",       0, any,    d_logOp (CallIndirect),             Compile_CallIndirect, 0, 0,  2, NULL ),       // 0x11
+    M3OP( "call_indirect",       0, any,    d_logOp (CallIndirect),             Compile_CallIndirect, 0, 0, -1, NULL ),       // 0x11
     M3OP( "return_call",         0, any,    d_emptyOpList,                      Compile_Call,         0, 0, -1, NULL ),       // 0x12 TODO: Optimize
     M3OP( "return_call_indirect",0, any,    d_emptyOpList,                      Compile_CallIndirect, 0, 0, -1, NULL ),       // 0x13
 
