@@ -2269,9 +2269,9 @@ const M3OpInfo M3_OP_Array [] =
     M3OP( "i32.ctz",            0,  i_32,   d_unaryOpList (u32, Ctz)                , NULL,           1, 1,  0, "ii" ),  // 0x68
     M3OP( "i32.popcnt",         0,  i_32,   d_unaryOpList (u32, Popcnt)             , NULL,           1, 1,  0, "ii" ),  // 0x69
 
-    M3OP( "i32.add",            -1, i_32,   d_commutativeBinOpList (i32, Add)       , NULL,           2, 1,  0, "iii" ), // 0x6a
-    M3OP( "i32.sub",            -1, i_32,   d_binOpList (i32, Subtract)             , NULL,           2, 1,  0, "iii" ), // 0x6b
-    M3OP( "i32.mul",            -1, i_32,   d_commutativeBinOpList (i32, Multiply)  , NULL,           2, 1,  0, "iii" ), // 0x6c
+    M3OP( "i32.add",            -1, i_32,   d_commutativeBinOpList (u32, Add)       , NULL,           2, 1,  0, "iii" ), // 0x6a
+    M3OP( "i32.sub",            -1, i_32,   d_binOpList (u32, Subtract)             , NULL,           2, 1,  0, "iii" ), // 0x6b
+    M3OP( "i32.mul",            -1, i_32,   d_commutativeBinOpList (u32, Multiply)  , NULL,           2, 1,  0, "iii" ), // 0x6c
     M3OP( "i32.div_s",          -1, i_32,   d_binOpList (i32, Divide)               , NULL,           2, 1,  0, "iii" ), // 0x6d
     M3OP( "i32.div_u",          -1, i_32,   d_binOpList (u32, Divide)               , NULL,           2, 1,  0, "iii" ), // 0x6e
     M3OP( "i32.rem_s",          -1, i_32,   d_binOpList (i32, Remainder)            , NULL,           2, 1,  0, "iii" ), // 0x6f
@@ -2289,9 +2289,9 @@ const M3OpInfo M3_OP_Array [] =
     M3OP( "i64.ctz",            0,  i_64,   d_unaryOpList (u64, Ctz)                , NULL,           1, 1,  0, "II" ),  // 0x7a
     M3OP( "i64.popcnt",         0,  i_64,   d_unaryOpList (u64, Popcnt)             , NULL,           1, 1,  0, "II" ),  // 0x7b
 
-    M3OP( "i64.add",            -1, i_64,   d_commutativeBinOpList (i64, Add)       , NULL,           2, 1,  0, "III" ), // 0x7c
-    M3OP( "i64.sub",            -1, i_64,   d_binOpList (i64, Subtract)             , NULL,           2, 1,  0, "III" ), // 0x7d
-    M3OP( "i64.mul",            -1, i_64,   d_commutativeBinOpList (i64, Multiply)  , NULL,           2, 1,  0, "III" ), // 0x7e
+    M3OP( "i64.add",            -1, i_64,   d_commutativeBinOpList (u64, Add)       , NULL,           2, 1,  0, "III" ), // 0x7c
+    M3OP( "i64.sub",            -1, i_64,   d_binOpList (u64, Subtract)             , NULL,           2, 1,  0, "III" ), // 0x7d
+    M3OP( "i64.mul",            -1, i_64,   d_commutativeBinOpList (u64, Multiply)  , NULL,           2, 1,  0, "III" ), // 0x7e
     M3OP( "i64.div_s",          -1, i_64,   d_binOpList (i64, Divide)               , NULL,           2, 1,  0, "III" ), // 0x7f
     M3OP( "i64.div_u",          -1, i_64,   d_binOpList (u64, Divide)               , NULL,           2, 1,  0, "III" ), // 0x80
     M3OP( "i64.rem_s",          -1, i_64,   d_binOpList (i64, Remainder)            , NULL,           2, 1,  0, "III" ), // 0x81

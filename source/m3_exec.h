@@ -191,10 +191,10 @@ d_m3CompareOp_f (f32, LessThanOrEqual,      <=)     d_m3CompareOp_f (f64, LessTh
 d_m3CompareOp_f (f32, GreaterThanOrEqual,   >=)     d_m3CompareOp_f (f64, GreaterThanOrEqual,   >=)
 #endif
 
-d_m3CommutativeOp_i (i32, Add,              +)      d_m3CommutativeOp_i (i64, Add,              +)
-d_m3CommutativeOp_i (i32, Multiply,         *)      d_m3CommutativeOp_i (i64, Multiply,         *)
+d_m3CommutativeOp_i (u32, Add,              +)      d_m3CommutativeOp_i (u64, Add,              +)
+d_m3CommutativeOp_i (u32, Multiply,         *)      d_m3CommutativeOp_i (u64, Multiply,         *)
 
-d_m3Op_i (i32, Subtract,                    -)      d_m3Op_i (i64, Subtract,                    -)
+d_m3Op_i (u32, Subtract,                    -)      d_m3Op_i (u64, Subtract,                    -)
 
 #define OP_SHL_32(X,N) ((X) << ((u32)(N) % 32))
 #define OP_SHL_64(X,N) ((X) << ((u64)(N) % 64))
