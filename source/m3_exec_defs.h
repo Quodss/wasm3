@@ -32,8 +32,8 @@ d_m3BeginExternC
 #   define d_m3OpSig                d_m3ExpOpSig            (f64 _fp0)
 #   define d_m3OpArgs               d_m3ExpOpArgs           (_fp0)
 #   define d_m3OpAllArgs            d_m3ExpOpAllArgs        (_fp0)
-#   define d_m3OpDefaultArgs        d_m3ExpOpDefaultArgs    (0.)
-#   define d_m3ClearRegisters       d_m3ExpClearRegisters   (_fp0 = 0.;)
+#   define d_m3OpDefaultArgs        d_m3ExpOpDefaultArgs    (0)
+#   define d_m3ClearRegisters       d_m3ExpClearRegisters   (_fp0 = 0;)
 # else
 #   define d_m3OpSig                d_m3BaseOpSig
 #   define d_m3OpArgs               d_m3BaseOpArgs

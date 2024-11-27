@@ -41,8 +41,8 @@ typedef uint8_t         u8;
 typedef int8_t          i8;
 
 #if d_m3ImplementFloat
-typedef double          f64;
-typedef float           f32;
+typedef uint64_t       f64;
+typedef uint32_t       f32;
 #endif
 
 #endif // d_m3ShortTypesDefined

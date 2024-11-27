@@ -20,6 +20,9 @@
 
 #include "wasm3_defs.h"
 
+#include "softfloat.h"
+#include "softfloat_types.h"
+
 #if defined(__cplusplus)
 extern "C" {
 #endif
@@ -83,8 +86,8 @@ typedef struct M3TaggedValue
     {
         uint32_t    i32;
         uint64_t    i64;
-        float       f32;
-        double      f64;
+        uint32_t    f32;
+        uint64_t    f64;
     } value;
 }
 M3TaggedValue, * IM3TaggedValue;

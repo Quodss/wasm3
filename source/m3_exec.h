@@ -163,32 +163,34 @@ d_m3CommutativeOpMacro(RES, REG, TYPE,NAME, OP, ##__VA_ARGS__)
 // compare needs to be distinct for fp 'cause the result must be _r0
 #define d_m3CompareOp_f(TYPE, NAME, OP)             d_m3OpMacro                 (_r0, _fp0, TYPE, NAME, M3_OPER, OP)
 #define d_m3CommutativeCmpOp_f(TYPE, NAME, OP)      d_m3CommutativeOpMacro      (_r0, _fp0, TYPE, NAME, M3_OPER, OP)
+#define d_m3CompareOpFunc_f(TYPE, NAME, OP)         d_m3OpMacro                 (_r0, _fp0, TYPE, NAME, M3_FUNC, OP)
+#define d_m3CommutativeCmpOpFunc_f(TYPE, NAME, OP)  d_m3CommutativeOpMacro      (_r0, _fp0, TYPE, NAME, M3_FUNC, OP)
 
 
 //-----------------------
 
 // signed
-d_m3CommutativeOp_i (i32, Equal,            ==)     d_m3CommutativeOp_i (i64, Equal,            ==)
-d_m3CommutativeOp_i (i32, NotEqual,         !=)     d_m3CommutativeOp_i (i64, NotEqual,         !=)
+d_m3CommutativeOp_i (i32, Equal,              ==)       d_m3CommutativeOp_i (i64, Equal,               ==)
+d_m3CommutativeOp_i (i32, NotEqual,           !=)       d_m3CommutativeOp_i (i64, NotEqual,            !=)
 
-d_m3Op_i (i32, LessThan,                    < )     d_m3Op_i (i64, LessThan,                    < )
-d_m3Op_i (i32, GreaterThan,                 > )     d_m3Op_i (i64, GreaterThan,                 > )
-d_m3Op_i (i32, LessThanOrEqual,             <=)     d_m3Op_i (i64, LessThanOrEqual,             <=)
-d_m3Op_i (i32, GreaterThanOrEqual,          >=)     d_m3Op_i (i64, GreaterThanOrEqual,          >=)
+d_m3Op_i (i32, LessThan,                      < )       d_m3Op_i (i64, LessThan,                       < )
+d_m3Op_i (i32, GreaterThan,                   > )       d_m3Op_i (i64, GreaterThan,                    > )
+d_m3Op_i (i32, LessThanOrEqual,               <=)       d_m3Op_i (i64, LessThanOrEqual,                <=)
+d_m3Op_i (i32, GreaterThanOrEqual,            >=)       d_m3Op_i (i64, GreaterThanOrEqual,             >=)
 
 // unsigned
-d_m3Op_i (u32, LessThan,                    < )     d_m3Op_i (u64, LessThan,                    < )
-d_m3Op_i (u32, GreaterThan,                 > )     d_m3Op_i (u64, GreaterThan,                 > )
-d_m3Op_i (u32, LessThanOrEqual,             <=)     d_m3Op_i (u64, LessThanOrEqual,             <=)
-d_m3Op_i (u32, GreaterThanOrEqual,          >=)     d_m3Op_i (u64, GreaterThanOrEqual,          >=)
+d_m3Op_i (u32, LessThan,                      < )       d_m3Op_i (u64, LessThan,                       < )
+d_m3Op_i (u32, GreaterThan,                   > )       d_m3Op_i (u64, GreaterThan,                    > )
+d_m3Op_i (u32, LessThanOrEqual,               <=)       d_m3Op_i (u64, LessThanOrEqual,                <=)
+d_m3Op_i (u32, GreaterThanOrEqual,            >=)       d_m3Op_i (u64, GreaterThanOrEqual,             >=)
 
 #if d_m3HasFloat
-d_m3CommutativeCmpOp_f (f32, Equal,         ==)     d_m3CommutativeCmpOp_f (f64, Equal,         ==)
-d_m3CommutativeCmpOp_f (f32, NotEqual,      !=)     d_m3CommutativeCmpOp_f (f64, NotEqual,      !=)
-d_m3CompareOp_f (f32, LessThan,             < )     d_m3CompareOp_f (f64, LessThan,             < )
-d_m3CompareOp_f (f32, GreaterThan,          > )     d_m3CompareOp_f (f64, GreaterThan,          > )
-d_m3CompareOp_f (f32, LessThanOrEqual,      <=)     d_m3CompareOp_f (f64, LessThanOrEqual,      <=)
-d_m3CompareOp_f (f32, GreaterThanOrEqual,   >=)     d_m3CompareOp_f (f64, GreaterThanOrEqual,   >=)
+d_m3CommutativeCmpOpFunc_f (f32, Equal,      _f32_eq)   d_m3CommutativeCmpOpFunc_f (f64, Equal,       _f64_eq)
+d_m3CommutativeCmpOpFunc_f (f32, NotEqual,   _f32_ne)   d_m3CommutativeCmpOpFunc_f (f64, NotEqual,    _f64_ne)
+d_m3CompareOpFunc_f (f32, LessThan,          _f32_lt)   d_m3CompareOpFunc_f (f64, LessThan,           _f64_lt)
+d_m3CompareOpFunc_f (f32, GreaterThan,       _f32_gt)   d_m3CompareOpFunc_f (f64, GreaterThan,        _f64_gt)
+d_m3CompareOpFunc_f (f32, LessThanOrEqual,   _f32_le)   d_m3CompareOpFunc_f (f64, LessThanOrEqual,    _f64_le)
+d_m3CompareOpFunc_f (f32, GreaterThanOrEqual,_f32_ge)   d_m3CompareOpFunc_f (f64, GreaterThanOrEqual, _f64_ge)
 #endif
 
 d_m3CommutativeOp_i (u32, Add,              +)      d_m3CommutativeOp_i (u64, Add,              +)
@@ -214,10 +216,10 @@ d_m3CommutativeOp_i (u64, Or,               |)
 d_m3CommutativeOp_i (u64, Xor,              ^)
 
 #if d_m3HasFloat
-d_m3CommutativeOp_f (f32, Add,              +)      d_m3CommutativeOp_f (f64, Add,              +)
-d_m3CommutativeOp_f (f32, Multiply,         *)      d_m3CommutativeOp_f (f64, Multiply,         *)
-d_m3Op_f (f32, Subtract,                    -)      d_m3Op_f (f64, Subtract,                    -)
-d_m3Op_f (f32, Divide,                      /)      d_m3Op_f (f64, Divide,                      /)
+d_m3CommutativeOpFunc_f (f32, Add,      _f32_add)      d_m3CommutativeOpFunc_f (f64, Add,      _f64_add)
+d_m3CommutativeOpFunc_f (f32, Multiply, _f32_mul)      d_m3CommutativeOpFunc_f (f64, Multiply, _f64_mul)
+d_m3OpFunc_f (f32, Subtract,            _f32_sub)      d_m3OpFunc_f (f64, Subtract,            _f64_sub)
+d_m3OpFunc_f (f32, Divide,              _f32_div)      d_m3OpFunc_f (f64, Divide,              _f64_div)
 #endif
 
 d_m3OpFunc_i(u32, Rotl, rotl32)
@@ -236,13 +238,13 @@ d_m3OpMacro_i(u64, Remainder, OP_REM_U);
 d_m3OpMacro_i(i64, Remainder, OP_REM_S, INT64_MIN);
 
 #if d_m3HasFloat
-d_m3OpFunc_f(f32, Min, min_f32);
-d_m3OpFunc_f(f32, Max, max_f32);
-d_m3OpFunc_f(f64, Min, min_f64);
-d_m3OpFunc_f(f64, Max, max_f64);
+d_m3OpFunc_f(f32, Min, _f32_min);
+d_m3OpFunc_f(f32, Max, _f32_max);
+d_m3OpFunc_f(f64, Min, _f64_min);
+d_m3OpFunc_f(f64, Max, _f64_max);
 
-d_m3OpFunc_f(f32, CopySign, copysignf);
-d_m3OpFunc_f(f64, CopySign, copysign);
+d_m3OpFunc_f(f32, CopySign, _f32_copysign);
+d_m3OpFunc_f(f64, CopySign, _f64_copysign);
 #endif
 
 // Unary operations
@@ -266,13 +268,13 @@ d_m3Op(TYPE##_##NAME##_s)                           \
 #define d_m3UnaryOp_f(TYPE, NAME, OPERATION)        d_m3UnaryMacro(_fp0, _fp0, TYPE, NAME, M3_UNARY, OPERATION)
 
 #if d_m3HasFloat
-d_m3UnaryOp_f (f32, Abs,        fabsf);         d_m3UnaryOp_f (f64, Abs,        fabs);
-d_m3UnaryOp_f (f32, Ceil,       ceilf);         d_m3UnaryOp_f (f64, Ceil,       ceil);
-d_m3UnaryOp_f (f32, Floor,      floorf);        d_m3UnaryOp_f (f64, Floor,      floor);
-d_m3UnaryOp_f (f32, Trunc,      truncf);        d_m3UnaryOp_f (f64, Trunc,      trunc);
-d_m3UnaryOp_f (f32, Sqrt,       sqrtf);         d_m3UnaryOp_f (f64, Sqrt,       sqrt);
-d_m3UnaryOp_f (f32, Nearest,    rintf);         d_m3UnaryOp_f (f64, Nearest,    rint);
-d_m3UnaryOp_f (f32, Negate,     -);             d_m3UnaryOp_f (f64, Negate,     -);
+d_m3UnaryOp_f (f32, Abs,        _f32_abs);          d_m3UnaryOp_f (f64, Abs,        _f64_abs);
+d_m3UnaryOp_f (f32, Ceil,       _f32_ceil);         d_m3UnaryOp_f (f64, Ceil,       _f64_ceil);
+d_m3UnaryOp_f (f32, Floor,      _f32_floor);        d_m3UnaryOp_f (f64, Floor,      _f64_floor);
+d_m3UnaryOp_f (f32, Trunc,      _f32_trunc);        d_m3UnaryOp_f (f64, Trunc,      _f64_trunc);
+d_m3UnaryOp_f (f32, Sqrt,       _f32_sqrt);         d_m3UnaryOp_f (f64, Sqrt,       _f64_sqrt);
+d_m3UnaryOp_f (f32, Nearest,    _f32_near);         d_m3UnaryOp_f (f64, Nearest,    _f64_near);
+d_m3UnaryOp_f (f32, Negate,     _f32_neg);          d_m3UnaryOp_f (f64, Negate,     _f64_neg);
 #endif
 
 #define OP_EQZ(x) ((x) == 0)
@@ -404,36 +406,50 @@ d_m3Op(TO##_##NAME##_##FROM##_s)                            \
 d_m3TypeModifyOp (_r0, _r0, i64, Extend, i32);
 d_m3TypeModifyOp (_r0, _r0, i64, Extend, u32);
 
+#define d_m3TypeModifyOp_f(REG_TO, REG_FROM, TO, NAME, FROM)  \
+d_m3Op(TO##_##NAME##_##FROM##_r)                            \
+{                                                           \
+    REG_TO = _##TO##_modify_##FROM( ((FROM) REG_FROM) );    \
+    nextOp ();                                              \
+}                                                           \
+                                                            \
+d_m3Op(TO##_##NAME##_##FROM##_s)                            \
+{                                                           \
+    FROM from = slot (FROM);                                \
+    REG_TO = _##TO##_modify_##FROM( from );    \
+    nextOp ();                                              \
+}
+
 // Float to float
 #if d_m3HasFloat
-d_m3TypeModifyOp (_fp0, _fp0, f32, Demote, f64);
-d_m3TypeModifyOp (_fp0, _fp0, f64, Promote, f32);
+d_m3TypeModifyOp_f (_fp0, _fp0, f32, Demote, f64);
+d_m3TypeModifyOp_f (_fp0, _fp0, f64, Promote, f32);
 #endif
 
 #define d_m3TypeConvertOp(REG_TO, REG_FROM, TO, NAME, FROM) \
 d_m3Op(TO##_##NAME##_##FROM##_r_r)                          \
 {                                                           \
-    REG_TO = (TO) ((FROM) REG_FROM);                        \
+    REG_TO = _##TO##_convert_##FROM((FROM) REG_FROM);       \
     nextOp ();                                              \
 }                                                           \
                                                             \
 d_m3Op(TO##_##NAME##_##FROM##_s_r)                          \
 {                                                           \
-    slot (TO) = (TO) ((FROM) REG_FROM);                     \
+    slot (TO) = _##TO##_convert_##FROM((FROM) REG_FROM);    \
     nextOp ();                                              \
 }                                                           \
                                                             \
 d_m3Op(TO##_##NAME##_##FROM##_r_s)                          \
 {                                                           \
     FROM from = slot (FROM);                                \
-    REG_TO = (TO) (from);                                   \
+    REG_TO = _##TO##_convert_##FROM(from);                  \
     nextOp ();                                              \
 }                                                           \
                                                             \
 d_m3Op(TO##_##NAME##_##FROM##_s_s)                          \
 {                                                           \
     FROM from = slot (FROM);                                \
-    slot (TO) = (TO) (from);                                \
+    slot (TO) = _##TO##_convert_##FROM(from);               \
     nextOp ();                                              \
 }
 
