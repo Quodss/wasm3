@@ -269,6 +269,9 @@ f64_isnan(sf64 a)
 #define _f32_neg_one   ( _f32_neg_zero | _f32_plus_one )
 #define _f64_neg_one   ( _f64_neg_zero | _f64_plus_one )
 
+#define _f32_plus_two   0x40000000U
+#define _f64_plus_two   0x4000000000000000UL
+
 // floating point values that are not representable in (u/i)(32/64) format
 // after truncation (rounds to zero)
 
@@ -523,7 +526,7 @@ _abs(f32)                       _abs(f64)
             return a;                                                           \
         }                                                                       \
         u8 fraction_part = (TYPE##_LEN_MANT - (exp - TYPE##_BIAS));             \
-        u64 fraction_mask = (1 << fraction_part) - 1;                           \
+        u64 fraction_mask = ((u64)1U << fraction_part) - 1;                     \
         if (!(fraction_mask & a))                                               \
         {                                                                       \
             return a;                                                           \
@@ -566,7 +569,7 @@ _ceil(f32)                      _ceil(f64)
             return a;                                                           \
         }                                                                       \
         u8 fraction_part = (TYPE##_LEN_MANT - (exp - TYPE##_BIAS));             \
-        u64 fraction_mask = (1 << fraction_part) - 1;                           \
+        u64 fraction_mask = ((u64)1 << fraction_part) - 1;                      \
         if (!(fraction_mask & a))                                               \
         {                                                                       \
             return a;                                                           \
@@ -647,11 +650,12 @@ _sqrt(f32)                      _sqrt(f64)
             TYPE##_sub(TO_SF(TYPE, ceil), TO_SF(TYPE, a))                       \
         );                                                                      \
         if (SF_COMP(eq, TYPE, ceil_diff, floor_diff))                           \
-        {   bool ceil_is_odd = TYPE##_eq(                                       \
-            TO_SF(TYPE, 0),                                                     \
-            TYPE##_rem(TO_SF(TYPE, ceil), TO_SF(TYPE, 2))                       \
-        );                                                                      \
-            return (ceil_is_odd) ? ceil : floor;                                \
+        {                                                                       \
+            TYPE rem = OF_SF(TYPE,                                              \
+                TYPE##_rem(TO_SF(TYPE, ceil), TO_SF(TYPE, _##TYPE##_plus_two))  \
+            );                                                                  \
+            bool ceil_is_even = SF_COMP(eq, TYPE, rem, 0);                      \
+            return (ceil_is_even) ? ceil : floor;                               \
         }                                                                       \
         return SF_COMP(lt, TYPE, ceil_diff, floor_diff) ? ceil : floor;         \
     }
