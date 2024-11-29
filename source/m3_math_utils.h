@@ -641,23 +641,47 @@ _sqrt(f32)                      _sqrt(f64)
         {                                                                       \
             return a;                                                           \
         }                                                                       \
-        TYPE floor = _##TYPE##_floor(a);                                        \
-        TYPE ceil = _##TYPE##_ceil(a);                                          \
-        TYPE floor_diff = OF_SF(TYPE,                                           \
-            TYPE##_sub(TO_SF(TYPE, a), TO_SF(TYPE, floor))                      \   
-        );                                                                      \
-        TYPE ceil_diff = OF_SF(TYPE,                                            \
-            TYPE##_sub(TO_SF(TYPE, ceil), TO_SF(TYPE, a))                       \
-        );                                                                      \
-        if (SF_COMP(eq, TYPE, ceil_diff, floor_diff))                           \
+        if (exp < TYPE##_BIAS)                                                  \
         {                                                                       \
-            TYPE rem = OF_SF(TYPE,                                              \
-                TYPE##_rem(TO_SF(TYPE, ceil), TO_SF(TYPE, _##TYPE##_plus_two))  \
-            );                                                                  \
-            bool ceil_is_even = SF_COMP(eq, TYPE, rem, 0);                      \
-            return (ceil_is_even) ? ceil : floor;                               \
+            if (exp == (TYPE##_BIAS - 1))                                       \
+            {                                                                   \
+                if (mant == 0)                                                  \
+                {                                                               \
+                    return _##TYPE##_neg_zero & a;                              \
+                }                                                               \
+                return ( TYPE##_SIGN(a) ) ? _##TYPE##_neg_one                   \
+                                          : _##TYPE##_plus_one;                 \
+            }                                                                   \
+            return _##TYPE##_neg_zero & a;                                      \
         }                                                                       \
-        return SF_COMP(lt, TYPE, ceil_diff, floor_diff) ? ceil : floor;         \
+        if ( (exp - TYPE##_BIAS) >= TYPE##_LEN_MANT )                           \
+        {                                                                       \
+            return a;                                                           \
+        }                                                                       \
+        u8 fraction_part = (TYPE##_LEN_MANT - (exp - TYPE##_BIAS));             \
+        u64 fraction_mask = ((u64)1 << fraction_part) - 1;                      \
+        u64 fraction = a & fraction_mask;                                       \
+        if (fraction == 0)                                                      \
+        {                                                                       \
+            return a;                                                           \
+        }                                                                       \
+        u64 half = ((u64)1 << (fraction_part - 1));                             \
+        if (fraction == half)                                                   \
+        {                                                                       \
+            return ((a >> fraction_part) & ~((u64)1)) << fraction_part;         \
+        }                                                                       \
+        if (fraction > half)                                                    \
+        {                                                                       \
+            mant = ((mant >> fraction_part) + 1) << fraction_part;              \
+            if (mant > TYPE##_MAX_MANT)                                         \
+            {                                                                   \
+                return ( (_##TYPE##_neg_zero & a)                               \
+                         | ((TYPE)(exp + 1) << TYPE##_LEN_MANT)                 \
+                );                                                              \
+            }                                                                   \
+            return (TYPE) (((a >> TYPE##_LEN_MANT) << TYPE##_LEN_MANT) | mant); \
+        }                                                                       \
+        return ((a >> fraction_part) << fraction_part);                         \
     }
 _near(f32)                      _near(f64)
 
