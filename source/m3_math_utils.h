@@ -632,7 +632,7 @@ _sqrt(f32)                      _sqrt(f64)
     _##TYPE##_near(TYPE a)                                                      \
     {                                                                           \
         u16 exp = TYPE##_EXP(a);                                                \
-        if ( exp ==  TYPE##_FULL_EXP)                                           \
+        if ( exp == TYPE##_FULL_EXP)                                            \
         {                                                                       \
             return a;                                                           \
         }                                                                       \
@@ -643,12 +643,8 @@ _sqrt(f32)                      _sqrt(f64)
         }                                                                       \
         if (exp < TYPE##_BIAS)                                                  \
         {                                                                       \
-            if (exp == (TYPE##_BIAS - 1))                                       \
+            if ( (exp == (TYPE##_BIAS - 1)) && (mant != 0) )                    \
             {                                                                   \
-                if (mant == 0)                                                  \
-                {                                                               \
-                    return _##TYPE##_neg_zero & a;                              \
-                }                                                               \
                 return ( TYPE##_SIGN(a) ) ? _##TYPE##_neg_one                   \
                                           : _##TYPE##_plus_one;                 \
             }                                                                   \
