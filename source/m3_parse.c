@@ -154,35 +154,48 @@ ParseSection_Table (M3Module * io_module, bytes_t i_bytes, cbytes_t i_end)
     u32 table_lim_min = 0;
     i32 table_lim_max = 0;
     u32 num_tables;
+    bool parsed_funcref_table = 0;
+
     _( ReadLEB_u32(&num_tables, &i_bytes, i_end) );
-    if (num_tables > 1)
-    {
-        _throw(m3Err_tooManyTables);
-    }
-    if (num_tables)
+    while (num_tables--)  // skip externref tables, parse funcref once
     {
         u8 ref_type;
         _( Read_u8(&ref_type, &i_bytes, i_end) );
-
         if (ref_type != d_refKind_func)
         {
-            _throw(m3Err_ExternTable);
+            u8 flag;
+            u32 sink;
+            _( Read_u8(&flag, &i_bytes, i_end) );
+            _( ReadLEB_u32(&sink, &i_bytes, i_end) );
+            if (flag == 1)
+            {
+                _( ReadLEB_u32 (&sink, &i_bytes, i_end) );
+            }
+            else if (flag != 0)
+            {
+                _throw(m3Err_WeirdFlag);
+            }
         }
-        table_lim_max = -1;
-        u8 flag;
-        _( Read_u8(&flag, &i_bytes, i_end) );
-        _( ReadLEB_u32(&table_lim_min, &i_bytes, i_end) );
-        if (flag == 1)
+        else
         {
-            _( ReadLEB_i32 (&table_lim_max, &i_bytes, i_end) );
-        }
-        else if (flag != 0)
-        {
-            _throw(m3Err_WeirdFlag);
+            _throwif("too many funcref tables", parsed_funcref_table);
+            parsed_funcref_table = 1;
+            table_lim_max = -1;
+            u8 flag;
+            _( Read_u8(&flag, &i_bytes, i_end) );
+            _( ReadLEB_u32(&table_lim_min, &i_bytes, i_end) );
+            if (flag == 1)
+            {
+                _( ReadLEB_i32 (&table_lim_max, &i_bytes, i_end) );
+            }
+            else if (flag != 0)
+            {
+                _throw(m3Err_WeirdFlag);
+            }
+            io_module->table0SizeMin = table_lim_min;
+            io_module->table0SizeMax = table_lim_max;
         }
     }
-    io_module->table0SizeMin = table_lim_min;
-    io_module->table0SizeMax = table_lim_max;
 
     _catch: return result;
 }
