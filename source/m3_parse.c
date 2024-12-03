@@ -157,7 +157,7 @@ ParseSection_Table (M3Module * io_module, bytes_t i_bytes, cbytes_t i_end)
     bool parsed_funcref_table = 0;
 
     _( ReadLEB_u32(&num_tables, &i_bytes, i_end) );
-    while (num_tables--)  // skip externref tables, parse funcref once
+    for (i32 table_idx = 0; table_idx < num_tables; table_idx++)  // skip externref tables, parse funcref once
     {
         u8 ref_type;
         _( Read_u8(&ref_type, &i_bytes, i_end) );
@@ -194,6 +194,7 @@ ParseSection_Table (M3Module * io_module, bytes_t i_bytes, cbytes_t i_end)
             }
             io_module->table0SizeMin = table_lim_min;
             io_module->table0SizeMax = table_lim_max;
+            io_module->table0Idx = table_idx;
         }
     }
 
@@ -710,6 +711,7 @@ _try {
     module->name = ".unnamed";                                                      m3log (parse, "load module: %d bytes", i_numBytes);
     module->startFunction = -1;
     module->dataCnt = -1;
+    module->table0Idx = -1;
     //module->hasWasmCodeCopy = false;
     module->environment = i_environment;
 

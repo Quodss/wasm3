@@ -111,6 +111,7 @@ typedef struct M3Module
     u32                     table0Size;
     u32                     table0SizeMin;
     i32                     table0SizeMax;  // -1 no upper limit, 0 no table
+    i32                     table0Idx;
 
     M3MemoryInfo            memoryInfo;
     bool                    memoryImported;

@@ -140,7 +140,8 @@ ValidateElem(IM3Module module)
     {
         u8 label;
         _( Read_u8(&label, &i_bytes, end) );
-        _throwif(m3Err_wasmMalformed, label);
+        _throwif(m3Err_wasmMalformed, label);  // elem tag 0x0
+        _throwif("only table idx != 0", module->table0Idx != 0);
         
         i32 offset;
         _( EvaluateExpression (module, &offset, c_m3Type_i32, &i_bytes, end) );
@@ -410,7 +411,7 @@ SkipImmediateArgs(m3opcode_t op,
                 u32 type_idx, table_idx;
                 _( ReadLEB_u32(&(type_idx), io_bytes, end) );
                 _( ReadLEB_u32(&(table_idx), io_bytes, end) );
-                _throwif("table idx > 0", table_idx);
+                _throwif("weird table", table_idx != module->table0Idx);
                 _throwif(
                     "type idx out of range",
                     type_idx >= module->numFuncTypes
@@ -674,7 +675,7 @@ ValidateFuncBody(M3Function function, IM3Module module)
                     _( ReadLEB_u32(&type_idx, &io_bytes, end) );
                     _( ReadLEB_u32(&table_idx, &io_bytes, end) );
 
-                    _throwif("table idx > 0", table_idx != 0);  // only one table supported
+                    _throwif("weird table", table_idx != module->table0Idx);  // only one table supported
                     _throwif("call indirect empty stack", type_i <= now.base_i);
                     _throwif(
                         "call indirect idx wrong type",
