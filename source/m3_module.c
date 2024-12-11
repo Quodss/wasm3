@@ -58,6 +58,7 @@ _try {
     global->type = i_type;
     global->imported = i_isImported;
     global->isMutable = i_mutable;
+    global->name = NULL;
 
     if (o_global)
         * o_global = global;

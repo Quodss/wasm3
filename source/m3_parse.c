@@ -666,7 +666,7 @@ M3Result  ParseModuleSection  (M3Module * o_module, u8 i_sectionType, bytes_t i_
 
     static M3Parser s_parsers [] =
     {
-        ParseSection_Custom,    // 0
+        NULL,                   // 0
         ParseSection_Type,      // 1
         ParseSection_Import,    // 2
         ParseSection_Function,  // 3

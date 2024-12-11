@@ -503,6 +503,14 @@ M3Result  Read_utf8  (cstr_t * o_utf8, bytes_t * io_bytes, cbytes_t i_end)
             const u8 * ptr = * io_bytes;
             const u8 * end = ptr + utf8Length;
 
+            for (u32 i = 0; i < utf8Length; i++)
+            {
+                if (ptr[i] == '\0')
+                {
+                    return "null character in utf-8 string";
+                }
+            }
+
             if (end <= i_end)
             {
                 char * utf8 = (char *)m3_Malloc (utf8Length + 1);
