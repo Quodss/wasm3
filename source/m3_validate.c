@@ -1144,6 +1144,10 @@ ValidateExports(IM3Module module)
             names[name_count++] = g.name;
         }
     }
+    if (name_count <= 1)
+    {
+        return m3Err_none;
+    }
 
     for (u32 i = 0; i < name_count - 1; i++)
     {
@@ -1151,12 +1155,12 @@ ValidateExports(IM3Module module)
         {
             if (strcmp(names[i], names[j]) == 0)
             {
-                _throw("non-unique export names");
+                return "non-unique export names";
             }
         }
     }
 
-    _catch: return result;
+   return m3Err_none;
 }
 
 
