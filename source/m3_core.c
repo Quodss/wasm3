@@ -488,7 +488,9 @@ M3Result  ReadLEB_i64  (i64 * o_value, bytes_t * io_bytes, cbytes_t i_end)
     return result;
 }
 
-
+// doesn't actually parse utf-8
+// but enforces that there's no null character in the name
+//
 M3Result  Read_utf8  (cstr_t * o_utf8, bytes_t * io_bytes, cbytes_t i_end)
 {
     *o_utf8 = NULL;
