@@ -31,6 +31,7 @@ ValidateMemory(IM3Module module)
     if (
         ( (lim_max < 0) && (lim_max != -1) )
         || ( (lim_max >= 0) && ((u32)lim_max < lim_min) )
+        || (lim_max > 65536)
     )
     {
         return m3Err_wasmMalformed;
@@ -158,6 +159,8 @@ ValidateElem(IM3Module module)
             _throwif(m3Err_wasmMalformed, func_idx >= module->numFunctions);
         }
     }
+
+    _throwif(m3Err_wasmMalformed, i_bytes != end);
 
     _catch: return result;
 }
@@ -1109,6 +1112,7 @@ ValidateData(IM3Module module)
         {
             continue;
         }
+        _throwif(m3Err_wasmMalformed, !module->memoryInfo.hasMemory)
         bytes_t i_bytes = data_segment.initExpr;
         bytes_t end = data_segment.initExpr + data_segment.initExprSize;
 

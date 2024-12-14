@@ -456,16 +456,20 @@ M3Result  InitDataSegments  (M3Memory * io_memory, IM3Module io_module)
 
         i32 segmentOffset;
         bytes_t start = segment->initExpr;
-_       (EvaluateExpression (io_module, & segmentOffset, c_m3Type_i32, & start, segment->initExpr + segment->initExprSize));
 
-        m3log (runtime, "loading data segment: %d; size: %d; offset: %d", i, segment->size, segmentOffset);
-
-        if (segmentOffset >= 0 && (size_t)(segmentOffset) + segment->size <= io_memory->mallocated->length)
+        if (start)
         {
-            u8 * dest = m3MemData (io_memory->mallocated) + segmentOffset;
-            memcpy (dest, segment->data, segment->size);
-        } else {
-            _throw ("data segment out of bounds");
+            _ (EvaluateExpression (io_module, & segmentOffset, c_m3Type_i32, & start, segment->initExpr + segment->initExprSize) );
+
+            m3log (runtime, "loading data segment: %d; size: %d; offset: %d", i, segment->size, segmentOffset);
+
+            if (segmentOffset >= 0 && (size_t)(segmentOffset) + segment->size <= io_memory->mallocated->length)
+            {
+                u8 * dest = m3MemData (io_memory->mallocated) + segmentOffset;
+                memcpy (dest, segment->data, segment->size);
+            } else {
+                _throw ("data segment out of bounds");
+            }
         }
     }
 

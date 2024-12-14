@@ -115,6 +115,8 @@ _               (NormalizeType (& retType, wasmType));
         }
     }
 
+    _throwif(m3Err_wasmMalformed, i_bytes != i_end);
+
 } _catch:
 
     if (result)
@@ -147,6 +149,8 @@ _       (ReadLEB_u32 (& funcTypeIndex, & i_bytes, i_end));
 
 _       (Module_AddFunction (io_module, funcTypeIndex, NULL /* import info */));
     }
+
+    _throwif(m3Err_wasmMalformed, i_bytes != i_end);
 
     _catch: return result;
 }
@@ -205,6 +209,8 @@ ParseSection_Table (M3Module * io_module, bytes_t i_bytes, cbytes_t i_end)
         }
     }
 
+    _throwif(m3Err_wasmMalformed, i_bytes != i_end);
+    
     _catch: return result;
 }
 
@@ -283,6 +289,8 @@ _               (Module_AddFunction (io_module, typeIndex, & import))
 
         FreeImportInfo (& import);
     }
+
+    _throwif(m3Err_wasmMalformed, i_bytes != i_end);
 
     _catch:
 
@@ -380,6 +388,8 @@ _       (ReadLEB_u32 (& index, & i_bytes, i_end));                              
         }
     }
 
+    _throwif(m3Err_wasmMalformed, i_bytes != i_end);
+
 _catch:
     m3_Free (utf8);
     for (u32 i = 0; i < name_count; i++)
@@ -406,6 +416,8 @@ _   (ReadLEB_u32 (& startFuncIndex, & i_bytes, i_end));                         
         io_module->startFunction = startFuncIndex;
     }
     else result = "start function index out of bounds";
+
+    _throwif(m3Err_wasmMalformed, i_bytes != i_end);
 
     _catch: return result;
 }
@@ -507,6 +519,10 @@ _                   (NormalizeType (& normalType, wasmType));
             }
             else _throw (m3Err_wasmSectionOverrun);
         }
+        else
+        {
+            _throw(m3Err_wasmMalformed);
+        }
     }
 
     _catch:
@@ -539,6 +555,10 @@ _   (ReadLEB_u32 (& numDataSegments, & i_bytes, i_end));                        
 _       (Read_u8 (&data_kind, &i_bytes, i_end));
         switch (data_kind)
         {
+            default:
+            {
+                _throw(m3Err_wasmMalformed);
+            }
             case d_dataKind_active0:
             {
                 segment->initExpr = i_bytes;
@@ -591,6 +611,8 @@ _               (ReadLEB_u32 (& segment->size, & i_bytes, i_end));
         }
     }
 
+    _throwif(m3Err_wasmMalformed, i_bytes != i_end);
+
     _catch:
 
     return result;
@@ -611,6 +633,8 @@ _   (ReadLEB_u32 (& numMemories, & i_bytes, i_end));                            
     _( ParseType_Memory (& io_module->memoryInfo, & i_bytes, i_end) );
 
     io_module->memoryInfo.hasMemory = 1;
+
+    _throwif(m3Err_wasmMalformed, i_bytes != i_end);
 
     _catch: return result;
 }
@@ -643,6 +667,8 @@ _       (Parse_InitExpr (io_module, & i_bytes, i_end));
 
         _throwif (m3Err_wasmMissingInitExpr, global->initExprSize <= 1);
     }
+
+    _throwif(m3Err_wasmMalformed, i_bytes != i_end);
 
     _catch: return result;
 }
@@ -708,13 +734,13 @@ M3Result
 ParseSection_DataCount (M3Module * io_module, bytes_t i_bytes, cbytes_t i_end)
 {
     M3Result result = m3Err_none;
-    i32 data_cnt = -1;
-    if (i_bytes < i_end)
-    {
-        u32 data_cnt_read;
-        _( ReadLEB_u32(&data_cnt_read, &i_bytes, i_end) );
-        data_cnt = (i32)data_cnt_read;
-    }
+    i32 data_cnt;
+    u32 data_cnt_read;
+    _( ReadLEB_u32(&data_cnt_read, &i_bytes, i_end) );
+    data_cnt = (i32)data_cnt_read;
+
+    _throwif(m3Err_wasmMalformed, i_bytes != i_end);
+    
     io_module->dataCnt = data_cnt;
 
     _catch: return result;
