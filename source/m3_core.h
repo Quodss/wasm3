@@ -192,6 +192,7 @@ M3AllocationFunctionStruct;
 #define d_dataKind_passive                  1
 #define d_dataKind_active_idx               2
 
+#define d_refKind_ext                       0x6f
 #define d_refKind_func                      0x70
 
 static const char * const c_waTypes []          = { "nil", "i32", "i64", "f32", "f64", "unknown" };

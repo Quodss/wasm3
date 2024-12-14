@@ -471,6 +471,10 @@ _ge(f32)                        _ge(f64)
         {                                                                       \
             return b;                                                           \
         }                                                                       \
+        if ((a & ~_##TYPE##_neg_zero) == 0 && (b & ~_##TYPE##_neg_zero) == 0)   \
+        {                                                                       \
+            return M3_MAX(a, b);                                                \
+        }                                                                       \
         return SF_COMP(lt, TYPE, a, b) ? a : b;                                 \
     }
 _min(f32)                       _min(f64)
@@ -487,6 +491,10 @@ _min(f32)                       _min(f64)
         if (TYPE##_isnan(TO_SF(TYPE, b)))                                       \
         {                                                                       \
             return b;                                                           \
+        }                                                                       \
+        if ((a & ~_##TYPE##_neg_zero) == 0 && (b & ~_##TYPE##_neg_zero) == 0)   \
+        {                                                                       \
+            return M3_MIN(a, b);                                                \
         }                                                                       \
         return SF_COMP(lt, TYPE, a, b) ? b : a;                                 \
     }
@@ -727,7 +735,7 @@ _trunc_convert(i64, f32)        _trunc_convert(i64, f64)
     _##TO##_modify_##FROM(FROM a)                                               \
     {                                                                           \
         softfloat_roundingMode = softfloat_round_near_even;                     \
-        return OF_SF(TO, FROM##_to_##TO(TO_SF(FROM, a)));                       \
+        return _##TO##_nan_unify(OF_SF(TO, FROM##_to_##TO(TO_SF(FROM, a))));    \
     }
 _modify(f32, f64)               _modify(f64, f32)
 

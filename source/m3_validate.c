@@ -1075,6 +1075,8 @@ ValidateFuncBody(M3Function function, IM3Module module)
         }
     }
 
+    _throwif(m3Err_wasmMalformed, (io_bytes != end));
+
     _catch: return result;
 }
 
@@ -1119,51 +1121,6 @@ ValidateData(IM3Module module)
     _catch: return result;
 }
 
-static M3Result
-ValidateExports(IM3Module module)
-{
-    cstr_t names[d_m3MaxSaneExportsCount];
-    u32 name_count = 0;
-
-    M3Result result = m3Err_none;
-
-    for (u32 i = 0; i < module->numFunctions; i++)
-    {
-        M3Function f = module->functions[i];
-        for (u16 j = 0; j < f.numNames; j++)
-        {
-            names[name_count++] = f.names[j];
-        }
-    }
-
-    for (u32 i = 0; i < module->numGlobals; i++)
-    {
-        M3Global g = module->globals[i];
-        if (g.name)
-        {
-            names[name_count++] = g.name;
-        }
-    }
-    if (name_count <= 1)
-    {
-        return m3Err_none;
-    }
-
-    for (u32 i = 0; i < name_count - 1; i++)
-    {
-        for (u32 j = i + 1; j < name_count; j++)
-        {
-            if (strcmp(names[i], names[j]) == 0)
-            {
-                return "non-unique export names";
-            }
-        }
-    }
-
-   return m3Err_none;
-}
-
-
 M3Result
 m3_ValidateModule(IM3Module module)
 {
@@ -1184,8 +1141,6 @@ m3_ValidateModule(IM3Module module)
     _( ValidateCode(module) );
 
     _( ValidateData(module) );
-    
-    _( ValidateExports(module) );
     
     _catch: return result;
 }

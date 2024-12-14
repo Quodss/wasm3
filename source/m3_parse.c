@@ -30,9 +30,13 @@ _   (Read_u8 (& flag, io_bytes, i_end));                   // really a u1
 _   (ReadLEB_u32 (& o_memory->initPages, io_bytes, i_end));
 
     o_memory->imaxPages = -1;
-    if (flag == 1)
+    if (flag == (u8)1)
     {
 _       (ReadLEB_i32 (& o_memory->imaxPages, io_bytes, i_end));
+        _throwif(
+            m3Err_wasmMalformed,
+            (o_memory->imaxPages < o_memory->initPages)
+        );
     }
     else if (flag != 0)
     {
@@ -163,6 +167,7 @@ ParseSection_Table (M3Module * io_module, bytes_t i_bytes, cbytes_t i_end)
         _( Read_u8(&ref_type, &i_bytes, i_end) );
         if (ref_type != d_refKind_func)
         {
+            _throwif(m3Err_wasmMalformed, (ref_type != d_refKind_ext));
             u8 flag;
             u32 sink;
             _( Read_u8(&flag, &i_bytes, i_end) );
@@ -187,6 +192,7 @@ ParseSection_Table (M3Module * io_module, bytes_t i_bytes, cbytes_t i_end)
             if (flag == 1)
             {
                 _( ReadLEB_i32 (&table_lim_max, &i_bytes, i_end) );
+                _throwif(m3Err_wasmMalformed, (table_lim_max < table_lim_min));
             }
             else if (flag != 0)
             {
@@ -195,6 +201,7 @@ ParseSection_Table (M3Module * io_module, bytes_t i_bytes, cbytes_t i_end)
             io_module->table0SizeMin = table_lim_min;
             io_module->table0SizeMax = table_lim_max;
             io_module->table0Idx = table_idx;
+            io_module->numTables = num_tables;
         }
     }
 
@@ -289,11 +296,14 @@ M3Result  ParseSection_Export  (IM3Module io_module, bytes_t i_bytes, cbytes_t  
 {
     M3Result result = m3Err_none;
     const char * utf8 = NULL;
+    struct {u8 owned; const char* name;} names[d_m3MaxSaneExportsCount];
+    u32 name_count = 0;
 
     u32 numExports;
 _   (ReadLEB_u32 (& numExports, & i_bytes, i_end));                                 m3log (parse, "** Export [%d]", numExports);
 
     _throwif("too many exports", numExports > d_m3MaxSaneExportsCount);
+
 
     for (u32 i = 0; i < numExports; ++i)
     {
@@ -312,6 +322,9 @@ _       (ReadLEB_u32 (& index, & i_bytes, i_end));                              
             {
                 func->names[func->numNames++] = utf8;
                 utf8 = NULL; // ownership transferred to M3Function
+                names[name_count].owned = 0;
+                names[name_count].name = func->names[func->numNames-1];
+                name_count++;
             }
             else
             {
@@ -322,17 +335,62 @@ _       (ReadLEB_u32 (& index, & i_bytes, i_end));                              
         {
             _throwif(m3Err_wasmMalformed, index >= io_module->numGlobals);
             IM3Global global = &(io_module->globals [index]);
-            m3_Free (global->name);
+            _throwif(m3Err_wasmMalformed, (global->name));
             global->name = utf8;
             utf8 = NULL; // ownership transferred to M3Global
+            names[name_count].owned = 0;
+            names[name_count].name = global->name;
+            name_count++;
+        }
+        else if (exportKind == d_externalKind_memory)
+        {
+            _throwif(m3Err_wasmMalformed, io_module->memoryInfo.hasMemory != 1);
+            _throwif(m3Err_wasmMalformed, index > 0);
+            names[name_count].owned = 1;
+            names[name_count].name = utf8;
+            utf8 = NULL;
+            name_count++;
+        }
+        else if (exportKind == d_externalKind_table)
+        {
+            _throwif(m3Err_wasmMalformed, index >= io_module->numTables);
+            names[name_count].owned = 1;
+            names[name_count].name = utf8;
+            utf8 = NULL;
+            name_count++;
+        }
+        else
+        {
+            _throw(m3Err_wasmMalformed);
         }
 
-        m3_Free (utf8);
+    }
+
+    if (name_count > 1)
+    {
+        for (u32 i = 0; i < name_count - 1; i++)
+        {
+            for (u32 j = i + 1; j < name_count; j++)
+            {
+                if (strcmp(names[i].name, names[j].name) == 0)
+                {
+                    _throw("non-unique names");
+                }
+            }
+        }
     }
 
 _catch:
     m3_Free (utf8);
+    for (u32 i = 0; i < name_count; i++)
+    {
+        if (names[i].owned)
+        {
+            m3_Free(names[i].name);
+        }
+    }
     return result;
+
 }
 
 
@@ -550,7 +608,7 @@ _   (ReadLEB_u32 (& numMemories, & i_bytes, i_end));                            
 
     _throwif (m3Err_tooManyMemorySections, numMemories != 1);
 
-    ParseType_Memory (& io_module->memoryInfo, & i_bytes, i_end);
+    _( ParseType_Memory (& io_module->memoryInfo, & i_bytes, i_end) );
 
     io_module->memoryInfo.hasMemory = 1;
 
@@ -754,6 +812,11 @@ _       (ReadLEB_u32 (& sectionLength, & pos, end));
 _       (ParseModuleSection (module, section, pos, sectionLength));
 
         pos += sectionLength;
+    }
+
+    if (pos != end)
+    {
+        _throw(m3Err_wasmMalformed);
     }
 
 } _catch:
