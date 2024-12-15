@@ -244,8 +244,8 @@ _               (Module_AddFunction (io_module, typeIndex, & import))
                 import = clearImport;
 
                 io_module->numFuncImports++;
+                break;
             }
-            break;
 
             case d_externalKind_table:
 //                  result = ParseType_Table (& i_bytes, i_end);
@@ -259,8 +259,8 @@ _               (Module_AddFunction (io_module, typeIndex, & import))
 // _               (ParseType_Memory (& io_module->memoryInfo, & i_bytes, i_end));
 //                 io_module->memoryImported = true;
                 _throw("memory import not implemented");
+                break;
             }
-            break;
 
             case d_externalKind_global:
             {
@@ -280,11 +280,13 @@ _               (Module_AddFunction (io_module, typeIndex, & import))
 //                 import = clearImport;
 //                 io_module->numGlobImports++;
                 _throw("global import not implemented");
+                break;
             }
-            break;
 
             default:
+            {
                 _throw (m3Err_wasmMalformed);
+            }
         }
 
         FreeImportInfo (& import);
@@ -657,6 +659,8 @@ _   (ReadLEB_u32 (& numGlobals, & i_bytes, i_end));                             
 _       (ReadLEB_i7 (& waType, & i_bytes, i_end));
 _       (NormalizeType (& type, waType));
 _       (Read_u8 (& isMutable, & i_bytes, i_end));                                 m3log (parse, "    global: [%d] %s mutable: %d", i, c_waTypes [type],   (u32) isMutable);
+
+        _throwif(m3Err_wasmMalformed, isMutable > 1);
 
         IM3Global global;
 _       (Module_AddGlobal (io_module, & global, type, isMutable, false /* isImport */));
